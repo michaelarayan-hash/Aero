@@ -1,9 +1,9 @@
 """
 Step 1: Capture calibration images
-Raspberry Pi HQ Camera + 6mm CS-mount lens
+Raspberry Pi HQ Camera + 6mm CS-mount lens (rpicam version)
 
 Usage:
-    python 1_capture_images.py
+    python3 1_capture_images.py
 
 Controls:
     SPACE  - capture image
@@ -12,69 +12,72 @@ Controls:
 """
 
 import cv2
+import numpy as np
+import subprocess
 import os
-import time
-from picamera2 import Picamera2
 
 # ── Settings ────────────────────────────────────────────────────────────────
-SAVE_DIR       = "calib_images"
-CAPTURE_WIDTH  = 2028   # Half-res mode, fast enough for live preview
-CAPTURE_HEIGHT = 1520   #   (full res 4056x3040 also works, just slower)
-TARGET_IMAGES  = 25     # Aim for at least 20 good ones
+SAVE_DIR      = "calib_images"
+WIDTH, HEIGHT = 1280, 720
+TARGET        = 25
 # ────────────────────────────────────────────────────────────────────────────
 
 os.makedirs(SAVE_DIR, exist_ok=True)
 
-picam2 = Picamera2()
-config = picam2.create_still_configuration(
-    main={"size": (CAPTURE_WIDTH, CAPTURE_HEIGHT), "format": "RGB888"},
-    lores={"size": (640, 480), "format": "YUV420"},   # fast preview stream
-    display="lores"
-)
-picam2.configure(config)
-picam2.start()
-time.sleep(1)  # warm-up
+cmd = [
+    "rpicam-vid",
+    "--width",       str(WIDTH),
+    "--height",      str(HEIGHT),
+    "--framerate",   "30",
+    "--codec",       "yuv420",
+    "--timeout",     "0",
+    "--nopreview",
+    "-o", "-"
+]
 
-count = len(os.listdir(SAVE_DIR))
-print(f"\n📷 HQ Camera ready — {CAPTURE_WIDTH}x{CAPTURE_HEIGHT}")
-print(f"   Images already captured: {count}")
-print(f"   Target: {TARGET_IMAGES} images\n")
-print("   SPACE = capture | D = delete last | Q = quit\n")
+proc       = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+frame_size = WIDTH * HEIGHT * 3 // 2   # YUV420
 
+count      = len(os.listdir(SAVE_DIR))
 last_saved = None
 
+print(f"\n HQ Camera ready — {WIDTH}x{HEIGHT}")
+print(f"   Images already in folder: {count}")
+print(f"   Target: {TARGET} images\n")
+print("   SPACE = capture | D = delete last | Q = quit\n")
+
 while True:
-    # Grab low-res preview for display
-    preview = picam2.capture_array("lores")
-    preview_bgr = cv2.cvtColor(preview, cv2.COLOR_YUV420p2BGR)
+    raw = proc.stdout.read(frame_size)
+    if len(raw) < frame_size:
+        print("Camera stream ended unexpectedly.")
+        break
+
+    yuv   = np.frombuffer(raw, dtype=np.uint8).reshape((HEIGHT * 3 // 2, WIDTH))
+    frame = cv2.cvtColor(yuv, cv2.COLOR_YUV2BGR_I420)
 
     # Overlay status
-    status = f"Captured: {count}/{TARGET_IMAGES}"
-    color  = (0, 255, 0) if count >= TARGET_IMAGES else (0, 200, 255)
-    cv2.putText(preview_bgr, status, (10, 30),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
-    cv2.putText(preview_bgr, "SPACE=capture  D=delete  Q=quit",
-                (10, preview_bgr.shape[0] - 10),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
+    status = f"Captured: {count}/{TARGET}"
+    color  = (0, 255, 0) if count >= TARGET else (0, 200, 255)
+    cv2.putText(frame, status, (10, 35),
+                cv2.FONT_HERSHEY_SIMPLEX, 1.0, color, 2)
+    cv2.putText(frame, "SPACE=capture  D=delete  Q=quit",
+                (10, HEIGHT - 10),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.55, (200, 200, 200), 1)
 
-    cv2.imshow("Calibration Capture — HQ Camera", preview_bgr)
+    cv2.imshow("Calibration Capture", frame)
     key = cv2.waitKey(1) & 0xFF
 
     if key == ord(' '):
-        # Capture full-res still
-        frame = picam2.capture_array("main")
-        frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
         path = os.path.join(SAVE_DIR, f"calib_{count:03d}.jpg")
-        cv2.imwrite(path, frame_bgr, [cv2.IMWRITE_JPEG_QUALITY, 95])
+        cv2.imwrite(path, frame, [cv2.IMWRITE_JPEG_QUALITY, 95])
         last_saved = path
         count += 1
         print(f"  ✓ Saved {path}")
 
-        # Flash feedback
-        flash = preview_bgr.copy()
-        flash[:] = (255, 255, 255)
-        cv2.imshow("Calibration Capture — HQ Camera", flash)
-        cv2.waitKey(100)
+        # White flash feedback
+        flash = np.ones_like(frame) * 255
+        cv2.imshow("Calibration Capture", flash)
+        cv2.waitKey(80)
 
     elif key == ord('d') and last_saved and os.path.exists(last_saved):
         os.remove(last_saved)
@@ -85,8 +88,7 @@ while True:
     elif key == ord('q'):
         break
 
-picam2.stop()
+proc.terminate()
 cv2.destroyAllWindows()
-
 print(f"\nDone. {count} images saved to '{SAVE_DIR}/'")
 print("Next step: run  python 2_calibrate.py")
