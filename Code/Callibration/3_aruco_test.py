@@ -1,3 +1,4 @@
+import csv
 import cv2
 import cv2.aruco as aruco
 import numpy as np
@@ -12,6 +13,7 @@ MARKER_SIZE_MM = 100.0  # Size of the ArUco marker in mm. CHANGE THIS TO MATCH Y
 ARUCO_DICT_TYPE = cv2.aruco.DICT_4X4_50  # CHANGE THIS TO MATCH YOUR MARKER DICT!
 DEFAULT_WIDTH, DEFAULT_HEIGHT = 1280, 720
 FRAMERATE = 15  # Lower this if you see lag buildup (try 10 or 15)
+CSV_FILE = "aruco_distance_results.csv"
 # ────────────────────────────────────────────────────────────────────────────
 
 # Marker corner object points in marker-local space (used by solvePnP)
@@ -54,6 +56,30 @@ def estimate_pose(corners, mtx, dist):
         rvecs.append(rvec)
         tvecs.append(tvec)
     return rvecs, tvecs
+
+
+def append_csv_row(estimate_mm, real_mm, csv_path=CSV_FILE):
+    """Append a measurement row to CSV, creating the file with a header if missing."""
+    os.makedirs(os.path.dirname(csv_path), exist_ok=True) if os.path.dirname(csv_path) else None
+
+    error_mm = estimate_mm - real_mm
+    error_percent = (abs(error_mm) / real_mm * 100) if real_mm else float('inf')
+
+    file_exists = os.path.isfile(csv_path)
+    with open(csv_path, mode='a', newline='') as f:
+        writer = csv.DictWriter(
+            f,
+            fieldnames=["estimate_mm", "real_mm", "error_mm", "error_percent"]
+        )
+        if not file_exists:
+            writer.writeheader()
+        writer.writerow({
+            "estimate_mm": round(estimate_mm, 2),
+            "real_mm": round(real_mm, 2),
+            "error_mm": round(error_mm, 2),
+            "error_percent": round(error_percent, 2)
+        })
+    return error_mm, error_percent
 
 
 def main():
@@ -229,9 +255,9 @@ def main():
                             print("  Skipped.")
                             continue
                         true_dist = float(true_dist_str)
-                        error = calc_dist - true_dist
-                        error_percent = (abs(error) / true_dist) * 100
+                        error, error_percent = append_csv_row(calc_dist, true_dist, CSV_FILE)
                         print(f"  Error: {error:+.2f} mm ({error_percent:.2f}%)")
+                        print(f"  Saved to: {CSV_FILE}")
                     except ValueError:
                         print("  Invalid input. Skipping.")
                 print("--------------------\n")
