@@ -4,12 +4,14 @@ import numpy as np
 import subprocess
 import os
 import sys
+import time
 
 # ── Settings ────────────────────────────────────────────────────────────────
 CALIB_FILE = "calibration.npz"
 MARKER_SIZE_MM = 50.0  # Size of the ArUco marker in mm. CHANGE THIS TO MATCH YOUR MARKER!
 ARUCO_DICT_TYPE = cv2.aruco.DICT_4X4_50  # CHANGE THIS TO MATCH YOUR MARKER DICT!
 DEFAULT_WIDTH, DEFAULT_HEIGHT = 1280, 720
+FRAMERATE = 15  # Lower this if you see lag buildup (try 10 or 15)
 # ────────────────────────────────────────────────────────────────────────────
 
 # Marker corner object points in marker-local space (used by solvePnP)
@@ -85,7 +87,7 @@ def main():
             "rpicam-vid",
             "--width",     str(width),
             "--height",    str(height),
-            "--framerate", "30",
+            "--framerate", str(FRAMERATE),
             "--codec",     "yuv420",
             "--timeout",   "0",
             "--nopreview",
@@ -127,8 +129,10 @@ def main():
     print(f"Using Marker Size: {MARKER_SIZE_MM} mm")
 
     rvecs, tvecs, ids = [], [], None  # keep last-known pose for 'v' handler
+    frame_budget_ms = 1000.0 / FRAMERATE  # ms per frame at current framerate
 
     while True:
+        t_start = time.monotonic()
         frame = None
 
         if proc:
@@ -199,6 +203,13 @@ def main():
             # No marker visible
             cv2.putText(frame, "SCANNING...", (12, 30),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 100, 255), 2)
+
+        # Lag indicator — red if processing is slower than the frame budget
+        elapsed_ms = (time.monotonic() - t_start) * 1000
+        lag_color = (0, 60, 255) if elapsed_ms > frame_budget_ms else (180, 180, 180)
+        cv2.putText(frame, f"{elapsed_ms:.1f}ms / {frame_budget_ms:.0f}ms budget",
+                    (12, frame.shape[0] - 12),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, lag_color, 1)
 
         cv2.imshow('ArUco Distance Test', frame)
 
