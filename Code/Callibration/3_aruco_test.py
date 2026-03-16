@@ -2,6 +2,8 @@ import cv2
 import cv2.aruco as aruco
 import numpy as np
 import subprocess
+import os
+import sys
 
 # ── Settings ────────────────────────────────────────────────────────────────
 CALIB_FILE = "calibration.npz"
