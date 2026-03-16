@@ -22,11 +22,11 @@ PREVIEW_DIR   = "undistorted"
 
 # IMPORTANT: count the INNER corners of your checkerboard (not the squares)
 # e.g. a 10x7 square board has 9x6 inner corners
-CHECKERBOARD  = (9, 6)
+CHECKERBOARD  = (10, 7)
 
 # Real-world square size — measure your printed checkerboard with a ruler
 # This only affects translation output, not the camera matrix itself
-SQUARE_SIZE_MM = 25.0
+SQUARE_SIZE_MM = 23.0
 # ────────────────────────────────────────────────────────────────────────────
 
 os.makedirs(PREVIEW_DIR, exist_ok=True)
