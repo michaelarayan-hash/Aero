@@ -69,7 +69,65 @@ Contains: camera matrix `K`, distortion coefficients `dist`, RMS reprojection er
 
 ## Simulation (PX4 + Gazebo Harmonic)
 
-### Setup
+### Prerequisites — install once
+
+#### 1. PX4 Autopilot
+
+```bash
+git clone https://github.com/PX4/PX4-Autopilot.git --recursive ~/PX4-Autopilot
+cd ~/PX4-Autopilot
+bash ./Tools/setup/ubuntu.sh          # installs all build deps (may take ~10 min)
+```
+
+After `ubuntu.sh` completes, do a first build to verify everything compiles:
+
+```bash
+cd ~/PX4-Autopilot
+make px4_sitl gz_x500                 # first build is slow (~5–15 min)
+```
+
+> `ubuntu.sh` installs GCC, CMake, Python deps, and Gazebo Harmonic automatically.
+> Run on Ubuntu 22.04 or 24.04. Reboot or re-source `~/.bashrc` after it finishes.
+
+#### 2. Gazebo Harmonic (gz-sim 8)
+
+Installed automatically by PX4's `ubuntu.sh` above. To install it standalone:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y gz-harmonic
+```
+
+Verify:
+
+```bash
+gz sim --versions          # should print 8.x.x
+gz sim -g                  # opens empty GUI (close it again)
+```
+
+#### 3. QGroundControl (GCS)
+
+Download the AppImage and place it at `~/QGroundControl.AppImage` (the path `config.py` expects):
+
+```bash
+wget -O ~/QGroundControl.AppImage \
+  https://d176tv9ibo4jno.cloudfront.net/latest/QGroundControl.AppImage
+chmod +x ~/QGroundControl.AppImage
+```
+
+For the latest daily build or stable release, check:
+https://docs.qgroundcontrol.com/master/en/qgc-user-guide/getting_started/download_and_install.html
+
+> QGC requires `libfuse2` on Ubuntu 22.04+:
+> `sudo apt-get install -y libfuse2`
+
+#### 4. Python environment (uv)
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh   # install uv if not present
+```
+
+### Python setup
 
 ```bash
 cd Simulation
@@ -195,6 +253,36 @@ Default is `x500_mono_cam` (forward-facing monocular camera, 1280×960, 30fps).
 
 Override vehicle: `./launch_sim.sh default x500_depth`
 
+### Camera feed
+
+The `x500_mono_cam` vehicle has a forward-facing 1280×960 30fps RGB camera published over
+gz-transport. `algorithms/camera_feed.py` subscribes to it and exposes the same `read()` interface
+as `cv2.VideoCapture`, so simulation and real-camera code are interchangeable.
+
+```bash
+# Standalone viewer (simulation must be running)
+python3 algorithms/camera_feed.py --world forest
+
+# Press Q to quit
+```
+
+Importable in algorithm scripts:
+
+```python
+from algorithms.camera_feed import SimCamera
+
+cam = SimCamera(world="forest")
+cam.start()
+cam.wait_for_frame()          # block until first frame
+
+ok, frame = cam.read()        # returns (bool, BGR numpy array) — same as cv2.VideoCapture.read()
+cam.stop()
+```
+
+> `camera_feed.py` uses the system `gz.transport13` / `gz.msgs10` packages (installed with Gazebo
+> Harmonic). These are not in the venv — the script adds `/usr/lib/python3/dist-packages` to
+> `sys.path` automatically. No extra install needed.
+
 ### Architecture
 
 ```
@@ -205,6 +293,7 @@ connection_test.py       — connect_drone / read_telemetry (standalone + import
 algorithms/
   __init__.py            — documents sys.path import pattern
   takeoff_land.py        — arm → takeoff → hover → land → disarm
+  camera_feed.py         — SimCamera: gz-transport subscriber, cv2-compatible read() interface
 ```
 
 ### MAVLink Ports

@@ -12,7 +12,7 @@ WORLDS_DIR = PX4_ROOT / "Tools/simulation/gz/worlds"
 
 # ── Vehicle ───────────────────────────────────────────────────────────────────
 # Camera variants: x500_mono_cam, x500_mono_cam_down, x500_depth
-VEHICLE = "x500_mono_cam"
+VEHICLE = "x500_mono_cam_down"
 MAKE_TARGET = f"gz_{VEHICLE}"
 
 # ── World (overridable via env var) ───────────────────────────────────────────

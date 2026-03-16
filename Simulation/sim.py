@@ -127,6 +127,8 @@ def main():
                         help=f"Vehicle model (default: {config.VEHICLE})")
     parser.add_argument("--gui", action="store_true",
                         help="Open Gazebo GUI (gz sim -g)")
+    parser.add_argument("--camera", action="store_true",
+                        help="Open simulated camera feed with ArUco detection")
     args = parser.parse_args()
 
     launch_sh = ROOT / "launch_sim.sh"
@@ -202,12 +204,24 @@ def main():
         else:
             print("[OK] Gazebo GUI running.")
 
-    # ── Step 5: keep alive, stream remaining server output ───────────────────
+    # ── Step 5: optionally launch camera feed ────────────────────────────────
+    if args.camera:
+        print("Starting camera feed (ArUco detection)...")
+        cam_proc = subprocess.Popen(
+            [sys.executable, str(ROOT / "algorithms" / "camera_feed.py"),
+             "--world", args.world, "--vehicle", args.vehicle],
+            cwd=ROOT,
+        )
+        procs.append(cam_proc)
+
+    # ── Step 6: keep alive, stream remaining server output ───────────────────
     print(f"\nAll processes running.  Ctrl-C to stop everything.\n")
     print(f"  MAVSDK (offboard scripts) : udp://:{config.MAVSDK_PORT}")
     print(f"  QGroundControl            : UDP {config.QGC_PORT} (auto-detected)")
     if args.gui:
         print(f"  Gazebo GUI                : running")
+    if args.camera:
+        print(f"  Camera feed (ArUco)       : running  [Q=quit, V=log distance]")
     print()
 
     for line in server.stdout:
