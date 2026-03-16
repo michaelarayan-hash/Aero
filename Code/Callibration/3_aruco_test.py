@@ -1,13 +1,13 @@
 import cv2
 import cv2.aruco as aruco
 import numpy as np
-import sys
-import os
+import subprocess
 
 # ── Settings ────────────────────────────────────────────────────────────────
 CALIB_FILE = "calibration.npz"
 MARKER_SIZE_MM = 50.0  # Size of the ArUco marker in mm. CHANGE THIS TO MATCH YOUR MARKER!
 ARUCO_DICT_TYPE = cv2.aruco.DICT_4X4_50  # CHANGE THIS TO MATCH YOUR MARKER DICT!
+DEFAULT_WIDTH, DEFAULT_HEIGHT = 1280, 720
 # ────────────────────────────────────────────────────────────────────────────
 
 def load_calibration(filepath):
@@ -29,58 +29,88 @@ def load_calibration(filepath):
         print(f"Loaded calibration from {filepath}")
         return mtx, dist, calib_size
 
+def start_camera(width, height):
+    """Starts the rpicam-vid process and returns the subprocess object."""
+    cmd = [
+        "rpicam-vid",
+        "--width",       str(width),
+        "--height",      str(height),
+        "--framerate",   "30",
+        "--codec",       "yuv420",
+        "--timeout",     "0",
+        "--nopreview",
+        "-o", "-"
+    ]
+    
+    print(f"Starting camera: {width}x{height}")
+    try:
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        return proc
+    except FileNotFoundError:
+        print("Error: 'rpicam-vid' not found. Are you running on a Raspberry Pi?")
+        print("Fallback to standard cv2.VideoCapture(0)...")
+        return None
+
 def main():
     # Load calibration
     mtx, dist, calib_size = load_calibration(CALIB_FILE)
     print(f"Calibration Matrix:\n{mtx}")
     print(f"Distortion Coefficients:\n{dist}")
     
+    # Determine resolution
     if calib_size:
-        print(f"Calibration Resolution: {calib_size[0]}x{calib_size[1]}")
+        width, height = calib_size
+    else:
+        width, height = 1280, 720  # Fallback
 
-    # Initialize ArUco dictionary and parameters
+    # Start video capture (rpicam-vid)
+    proc = None
+    cap = None
+
     try:
-        aruco_dict = cv2.aruco.getPredefinedDictionary(ARUCO_DICT_TYPE)
-        parameters = cv2.aruco.DetectorParameters()
-    except AttributeError:
-        print("Error: cv2.aruco attributes not found. Ensure 'opencv-contrib-python' is installed.")
-        sys.exit(1)
+        # Try to use rpicam-vid first
+        cmd = [
+            "rpicam-vid",
+            "--width",       str(width),
+            "--height",      str(height),
+            "--framerate",   "30",
+            "--codec",       "yuv420",
+            "--timeout",     "0",
+            "--nopreview",
+            "-o", "-"
+        ]
+        
+        # Check if rpicam-vid exists before running
+        subprocess.check_call(["which", "rpicam-vid"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        
+        print(f"Starting rpicam-vid: {width}x{height}")
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        frame_size = width * height * 3 // 2 # YUV420
 
-    # Start video capture
-    cap = cv2.VideoCapture(0) # Adjust camera index if needed
-    
-    # Try to set resolution to match calibration
-    if calib_size:
-        cap.set(cv2.CAP_PROP_FRAME_WIDTH, calib_size[0])
-        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, calib_size[1])
-    
-    if not cap.isOpened():
-        print("Error: Could not open camera.")
-        sys.exit(1)
-
-    # Read first frame to check actual resolution
-    ret, frame = cap.read()
-    if not ret:
-        print("Error: Could not read frame.")
-        sys.exit(1)
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        print("Warning: 'rpicam-vid' not found or failed. Falling back to cv2.VideoCapture(0).")
+        cap = cv2.VideoCapture(0)
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
         
-    h, w = frame.shape[:2]
-    print(f"Camera Resolution: {w}x{h}")
-    
-    # Scale K if resolution differs
-    if calib_size and (w != calib_size[0] or h != calib_size[1]):
-        print("Warning: Camera resolution does not match calibration resolution.")
-        print("Scaling calibration matrix...")
-        
-        scale_x = w / calib_size[0]
-        scale_y = h / calib_size[1]
-        
-        mtx[0, 0] *= scale_x # fx
-        mtx[1, 1] *= scale_y # fy
-        mtx[0, 2] *= scale_x # cx
-        mtx[1, 2] *= scale_y # cy
-        
-        print(f"New Camera Matrix:\n{mtx}")
+        if not cap.isOpened():
+            print("Error: Could not open camera.")
+            sys.exit(1)
+            
+        # Check actual resolution
+        ret, frame = cap.read()
+        if ret:
+            h, w = frame.shape[:2]
+            if w != width or h != height:
+                print(f"Warning: Requested {width}x{height}, but got {w}x{h}.")
+                # Scale K if resolution differs
+                scale_x = w / width
+                scale_y = h / height
+                mtx[0, 0] *= scale_x
+                mtx[1, 1] *= scale_y
+                mtx[0, 2] *= scale_x
+                mtx[1, 2] *= scale_y
+                width, height = w, h
 
     print("\nControls:")
     print("  'q' - Quit")
@@ -88,8 +118,24 @@ def main():
     print(f"Using Marker Size: {MARKER_SIZE_MM} mm")
 
     while True:
-        ret, frame = cap.read()
-        if not ret:
+        frame = None
+        
+        if proc:
+            # Read from rpicam-vid stdout
+            raw = proc.stdout.read(frame_size)
+            if len(raw) < frame_size:
+                print("Camera stream ended unexpectedly.")
+                break
+            
+            yuv = np.frombuffer(raw, dtype=np.uint8).reshape((height * 3 // 2, width))
+            frame = cv2.cvtColor(yuv, cv2.COLOR_YUV2BGR_I420)
+        elif cap:
+            # Read from cv2.VideoCapture
+            ret, frame = cap.read()
+            if not ret:
+                break
+        
+        if frame is None:
             break
 
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
@@ -158,7 +204,11 @@ def main():
             else:
                 print("No markers detected for verification.")
 
-    cap.release()
+    if proc:
+        proc.terminate()
+    elif cap:
+        cap.release()
+
     cv2.destroyAllWindows()
 
 if __name__ == "__main__":
