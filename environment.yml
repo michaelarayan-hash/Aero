@@ -1,0 +1,10 @@
+name: aero_calib
+channels:
+  - defaults
+dependencies:
+  - python=3.9
+  - pip
+  - pip:
+    - opencv-python
+    - opencv-contrib-python
+    - numpy
