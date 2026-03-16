@@ -154,18 +154,51 @@ def main():
         else:
             corners, ids, _ = cv2.aruco.detectMarkers(gray, aruco_dict, parameters=parameters)
 
-        if ids is not None and len(ids) > 0:
-            cv2.aruco.drawDetectedMarkers(frame, corners, ids)
+        detected = ids is not None and len(ids) > 0
 
-            rvecs, tvecs = estimate_pose(corners, mtx, dist)
+        if detected:
+            rvecs, tvecs = estimate_pose(corners, mtx, dist)  # persisted for 'v' handler
+
+            # Green border around the whole frame when a marker is on screen
+            border = 6
+            cv2.rectangle(frame, (border, border),
+                          (frame.shape[1] - border, frame.shape[0] - border),
+                          (0, 255, 0), border)
 
             for i, marker_id in enumerate(ids):
-                cv2.drawFrameAxes(frame, mtx, dist, rvecs[i], tvecs[i], MARKER_SIZE_MM / 2)
+                pts = corners[i][0].astype(int)  # 4 corner points
 
+                # Corner bracket highlights (more prominent than drawDetectedMarkers)
+                bracket_len = max(12, int(np.linalg.norm(pts[1] - pts[0]) * 0.25))
+                bracket_color = (0, 255, 0)
+                bracket_thickness = 3
+                for j, pt in enumerate(pts):
+                    next_pt = pts[(j + 1) % 4]
+                    prev_pt = pts[(j - 1) % 4]
+                    dir_next = (next_pt - pt).astype(float)
+                    dir_prev = (prev_pt - pt).astype(float)
+                    norm_next = dir_next / (np.linalg.norm(dir_next) + 1e-6)
+                    norm_prev = dir_prev / (np.linalg.norm(dir_prev) + 1e-6)
+                    p1 = (pt + norm_next * bracket_len).astype(int)
+                    p2 = (pt + norm_prev * bracket_len).astype(int)
+                    cv2.line(frame, tuple(pt), tuple(p1), bracket_color, bracket_thickness)
+                    cv2.line(frame, tuple(pt), tuple(p2), bracket_color, bracket_thickness)
+
+                # Pose axes and distance label
+                cv2.drawFrameAxes(frame, mtx, dist, rvecs[i], tvecs[i], MARKER_SIZE_MM / 2)
                 distance = float(np.linalg.norm(tvecs[i]))
-                cv2.putText(frame, f"ID{marker_id[0]} {distance:.1f}mm",
-                            (int(corners[i][0][0][0]), int(corners[i][0][0][1]) - 10),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+                label_pt = (pts[0][0], pts[0][1] - 10)
+                cv2.putText(frame, f"ID{marker_id[0]}  {distance:.1f}mm",
+                            label_pt, cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 255, 0), 2)
+
+            # Status bar — top-left
+            status_text = f"DETECTED: {len(ids)} marker{'s' if len(ids) > 1 else ''}"
+            cv2.putText(frame, status_text, (12, 30),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+        else:
+            # No marker visible
+            cv2.putText(frame, "SCANNING...", (12, 30),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 100, 255), 2)
 
         cv2.imshow('ArUco Distance Test', frame)
 
