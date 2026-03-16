@@ -8,7 +8,7 @@ import time
 
 # ── Settings ────────────────────────────────────────────────────────────────
 CALIB_FILE = "calibration.npz"
-MARKER_SIZE_MM = 50.0  # Size of the ArUco marker in mm. CHANGE THIS TO MATCH YOUR MARKER!
+MARKER_SIZE_MM = 100.0  # Size of the ArUco marker in mm. CHANGE THIS TO MATCH YOUR MARKER!
 ARUCO_DICT_TYPE = cv2.aruco.DICT_4X4_50  # CHANGE THIS TO MATCH YOUR MARKER DICT!
 DEFAULT_WIDTH, DEFAULT_HEIGHT = 1280, 720
 FRAMERATE = 15  # Lower this if you see lag buildup (try 10 or 15)
