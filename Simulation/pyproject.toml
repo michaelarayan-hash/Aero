@@ -5,8 +5,9 @@ requires-python = ">=3.10"
 dependencies = [
     "mavsdk>=2.0.0",
     "numpy<2",
-    "opencv-python>=4.8,<4.10",
+    "opencv-contrib-python>=4.8,<4.10",
+    "pupil-apriltags>=1.0.1",
 ]
 
 [dependency-groups]
-dev = []
+dev = ["pytest>=8.0"]
