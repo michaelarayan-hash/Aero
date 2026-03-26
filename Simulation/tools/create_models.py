@@ -25,7 +25,7 @@ SDF_TEMPLATE = """\
 <sdf version="1.9">
   <model name="{name}">
     <static>true</static>
-    <pose>0 0 0.001 0 0 0</pose>
+    <pose>0 0 0.01 0 0 0</pose>
     <link name="base">
       <visual name="base_visual">
         <geometry>
