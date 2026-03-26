@@ -161,12 +161,22 @@ def main():
 
     # ── Step 2: launch PX4 SITL server ───────────────────────────────────────
     print(f"\nStarting PX4 SITL server — world={args.world}  vehicle={args.vehicle}")
+    # Automatically add the local models/ directory to GZ_SIM_RESOURCE_PATH so
+    # Gazebo can resolve model:// URIs in custom world files without the user
+    # having to set this env var manually before every launch.
+    server_env = os.environ.copy()
+    models_dir = str(ROOT / "models")
+    existing_resource_path = server_env.get("GZ_SIM_RESOURCE_PATH", "")
+    server_env["GZ_SIM_RESOURCE_PATH"] = (
+        f"{models_dir}:{existing_resource_path}" if existing_resource_path else models_dir
+    )
     server = subprocess.Popen(
         ["bash", str(launch_sh), args.world, args.vehicle],
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
         cwd=ROOT,
+        env=server_env,
     )
     procs.append(server)
 
