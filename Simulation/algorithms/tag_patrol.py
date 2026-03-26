@@ -15,15 +15,14 @@ Usage:
 Controls:
     Q  in OpenCV window — graceful shutdown (lands drone)
 """
+import argparse
 import asyncio
 import sys
 import threading
 import time
 from pathlib import Path
 
-import argparse
 import cv2
-import numpy as np
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -36,15 +35,16 @@ from mavsdk.action import ActionError
 from mavsdk.offboard import OffboardError, PositionNedYaw
 
 # ── Constants ─────────────────────────────────────────────────────────────────
-VEHICLE          = "x500_mono_cam_down"
-MARKER_SIZE_MM   = 500.0
-ARUCO_DICTS      = ["4x4_50"]
+VEHICLE           = "x500_mono_cam_down"
+MARKER_SIZE_MM    = 500.0   # large ground markers in tag_demo world (real-camera default: 100mm)
+ARUCO_DICTS       = ["4x4_50"]
 APRILTAG_FAMILIES = ["tag36h11"]
-SETPOINT_HZ      = 10
-ACCEPTANCE_M     = 0.5
-HOVER_SEC        = 2.0
-IN_AIR_TIMEOUT   = 30
-LAND_TIMEOUT     = 60
+SETPOINT_HZ       = 10
+ACCEPTANCE_M      = 0.5
+HOVER_SEC         = 2.0
+GPS_TIMEOUT_SEC   = 60
+IN_AIR_TIMEOUT    = 30
+LAND_TIMEOUT      = 60
 
 
 # ── Waypoints ─────────────────────────────────────────────────────────────────
@@ -73,29 +73,36 @@ async def _wait_in_air(drone, state: bool, timeout: float, label: str) -> None:
         raise TimeoutError(f"Timed out waiting for {label} after {timeout}s")
 
 
-async def _get_ned_position(drone):
-    """Return (north_m, east_m, down_m) from the first telemetry sample."""
-    async for pv in drone.telemetry.position_velocity_ned():
-        return pv.position.north_m, pv.position.east_m, pv.position.down_m
-
-
 async def fly_to_ned(
     drone, n: float, e: float, d: float, shutdown_event: threading.Event
 ) -> None:
     """Stream NED setpoint at SETPOINT_HZ until within ACCEPTANCE_M or shutdown."""
     target = PositionNedYaw(n, e, d, 0.0)
     period = 1.0 / SETPOINT_HZ
-    while not shutdown_event.is_set():
-        await drone.offboard.set_position_ned(target)
-        try:
-            cn, ce, cd = await asyncio.wait_for(_get_ned_position(drone), timeout=2.0)
-        except asyncio.TimeoutError:
+
+    # Keep one open telemetry subscription for the duration of this waypoint leg.
+    async def _poll_pos():
+        async for pv in drone.telemetry.position_velocity_ned():
+            yield pv.position.north_m, pv.position.east_m, pv.position.down_m
+
+    async def _next_pos(gen):
+        return await gen.__anext__()
+
+    pos_gen = _poll_pos()
+    try:
+        while not shutdown_event.is_set():
+            await drone.offboard.set_position_ned(target)
+            try:
+                cn, ce, cd = await asyncio.wait_for(_next_pos(pos_gen), timeout=2.0)
+            except asyncio.TimeoutError:
+                await asyncio.sleep(period)
+                continue
+            dist = ((cn - n) ** 2 + (ce - e) ** 2 + (cd - d) ** 2) ** 0.5
+            if dist < ACCEPTANCE_M:
+                return
             await asyncio.sleep(period)
-            continue
-        dist = ((cn - n) ** 2 + (ce - e) ** 2 + (cd - d) ** 2) ** 0.5
-        if dist < ACCEPTANCE_M:
-            return
-        await asyncio.sleep(period)
+    finally:
+        await pos_gen.aclose()
 
 
 # ── Patrol coroutine ──────────────────────────────────────────────────────────
@@ -104,15 +111,23 @@ async def run_patrol(
     args: argparse.Namespace,
     shutdown_event: threading.Event,
     waypoint_idx: list,
+    waypoint_lock: threading.Lock,
 ) -> None:
     waypoints = make_waypoints(args.altitude, args.spacing)
 
     try:
         async with connect_drone_ctx() as drone:
             print("[patrol] Waiting for GPS fix...")
-            async for health in drone.telemetry.health():
-                if health.is_global_position_ok and health.is_home_position_ok:
-                    break
+
+            async def _gps_ready():
+                async for health in drone.telemetry.health():
+                    if health.is_global_position_ok and health.is_home_position_ok:
+                        return
+
+            try:
+                await asyncio.wait_for(_gps_ready(), timeout=GPS_TIMEOUT_SEC)
+            except asyncio.TimeoutError:
+                raise TimeoutError(f"GPS fix not acquired within {GPS_TIMEOUT_SEC}s")
 
             print(f"[patrol] Arming + taking off to {args.altitude}m AGL...")
             await drone.action.set_takeoff_altitude(args.altitude)
@@ -128,7 +143,8 @@ async def run_patrol(
             for i, (n, e, d) in enumerate(waypoints):
                 if shutdown_event.is_set():
                     break
-                waypoint_idx[0] = i
+                with waypoint_lock:
+                    waypoint_idx[0] = i
                 print(f"[patrol] Waypoint {i + 1}/{len(waypoints)}: N={n} E={e} D={d}")
                 await fly_to_ned(drone, n, e, d, shutdown_event)
                 await asyncio.sleep(HOVER_SEC)
@@ -159,6 +175,7 @@ def display_loop(
     detector: TagDetector,
     shutdown_event: threading.Event,
     waypoint_idx: list,
+    waypoint_lock: threading.Lock,
     n_waypoints: int,
 ) -> None:
     cv2.namedWindow("Tag Patrol", cv2.WINDOW_NORMAL)
@@ -176,15 +193,17 @@ def display_loop(
         detections = detector.detect(frame)
         detector.draw(frame, detections)
 
-        wp = waypoint_idx[0] + 1
+        with waypoint_lock:
+            wp = waypoint_idx[0] + 1
         cv2.putText(frame, f"Waypoint {wp}/{n_waypoints}",
                     (12, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (255, 255, 255), 2)
         cv2.putText(frame, f"Detections this frame: {len(detections)}",
                     (12, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 200, 200), 1)
 
-        elapsed_ms = (time.monotonic() - t0) * 1000
-        lag_col = (0, 60, 255) if elapsed_ms > frame_budget_ms else (120, 120, 120)
-        cv2.putText(frame, f"{elapsed_ms:.1f}ms",
+        # proc_ms = total read+detect+draw time; red if over 33 ms budget
+        proc_ms = (time.monotonic() - t0) * 1000
+        lag_col = (0, 60, 255) if proc_ms > frame_budget_ms else (120, 120, 120)
+        cv2.putText(frame, f"{proc_ms:.1f}ms",
                     (12, frame.shape[0] - 12), cv2.FONT_HERSHEY_SIMPLEX, 0.45, lag_col, 1)
 
         cv2.imshow("Tag Patrol", frame)
@@ -231,21 +250,25 @@ def main() -> None:
         sys.exit(1)
 
     shutdown_event = threading.Event()
+    waypoint_lock = threading.Lock()
     waypoint_idx = [0]
     waypoints = make_waypoints(args.altitude, args.spacing)
 
     patrol_thread = threading.Thread(
         target=lambda: asyncio.run(
-            run_patrol(args, shutdown_event, waypoint_idx)
+            run_patrol(args, shutdown_event, waypoint_idx, waypoint_lock)
         ),
         daemon=True,
         name="patrol",
     )
     patrol_thread.start()
 
-    display_loop(cam, detector, shutdown_event, waypoint_idx, len(waypoints))
+    display_loop(cam, detector, shutdown_event, waypoint_idx, waypoint_lock, len(waypoints))
 
+    shutdown_event.set()  # ensure patrol thread exits if display ended first
     patrol_thread.join(timeout=30)
+    if patrol_thread.is_alive():
+        print("[WARN] patrol thread did not exit cleanly within 30s")
     cam.stop()
     print("[main] Done.")
 
