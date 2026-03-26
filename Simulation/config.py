@@ -21,7 +21,7 @@ WORLD = os.environ.get("PX4_GZ_WORLD", "default")
 # ── MAVLink ports ─────────────────────────────────────────────────────────────
 MAVSDK_PORT = 14540       # offboard / algorithm scripts
 QGC_PORT = 14550          # QGroundControl broadcast
-MAVSDK_ADDRESS = f"udp://:{MAVSDK_PORT}"
+MAVSDK_ADDRESS = f"udpin://0.0.0.0:{MAVSDK_PORT}"
 
 # ── Timeouts ──────────────────────────────────────────────────────────────────
 CONNECT_TIMEOUT_SEC = 30
