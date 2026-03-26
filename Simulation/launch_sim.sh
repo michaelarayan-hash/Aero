@@ -33,7 +33,7 @@ VEHICLE="${2:-$DEFAULT_VEHICLE}"
 # PX4_GZ_WORLDS env var overrides the default bundled worlds directory.
 DEFAULT_WORLDS_DIR="$PX4_ROOT/Tools/simulation/gz/worlds"
 WORLDS_DIR="${PX4_GZ_WORLDS:-$DEFAULT_WORLDS_DIR}"
-WORLDS_DIR="${WORLDS_DIR/#\~/$HOME}"       # expand leading ~ safely (no eval)
+WORLDS_DIR="$(eval echo "$WORLDS_DIR")"   # expand ~ if present
 WORLD_SDF="$WORLDS_DIR/${WORLD}.sdf"
 
 # ── Validate world ────────────────────────────────────────────────────────────
@@ -55,8 +55,7 @@ if [[ ! -f "$WORLD_SDF" ]]; then
     exit 1
 fi
 
-# ── Pre-launch summary ────────────────────────────────────────────────────────
-echo "================================================"
+echo "=================v==============================="
 echo "  PX4 SITL + Gazebo Harmonic"
 echo "================================================"
 echo "  PX4 root   : $PX4_ROOT"
@@ -78,6 +77,35 @@ echo ""
 echo "  Press Ctrl-C to stop simulation."
 echo "================================================"
 echo ""
+
+# ── Symlink custom world + sibling models into PX4's directories ──────────────
+# PX4's rcS startup script hardcodes ~/PX4-Autopilot/Tools/simulation/gz/worlds/
+# as the world SDF location. When using a custom worlds directory, we symlink
+# the world SDF (and any models in a sibling models/ dir) into PX4's directories
+# so Gazebo can find them without needing GZ_SIM_RESOURCE_PATH to be set.
+if [[ "$WORLDS_DIR" != "$DEFAULT_WORLDS_DIR" ]]; then
+    PX4_GZ_WORLDS_DEFAULT="$PX4_ROOT/Tools/simulation/gz/worlds"
+    PX4_GZ_MODELS_DEFAULT="$PX4_ROOT/Tools/simulation/gz/models"
+    SIBLING_MODELS_DIR="$(dirname "$WORLDS_DIR")/models"
+
+    # Symlink the world SDF if not already there
+    if [[ ! -e "$PX4_GZ_WORLDS_DEFAULT/$WORLD.sdf" ]]; then
+        ln -sf "$WORLD_SDF" "$PX4_GZ_WORLDS_DEFAULT/$WORLD.sdf"
+        echo "  Linked world: $WORLD.sdf → $PX4_GZ_WORLDS_DEFAULT/"
+    fi
+
+    # Symlink any models in the sibling models/ directory
+    if [[ -d "$SIBLING_MODELS_DIR" && -d "$PX4_GZ_MODELS_DEFAULT" ]]; then
+        for model_dir in "$SIBLING_MODELS_DIR"/*/; do
+            model_name="$(basename "$model_dir")"
+            target="$PX4_GZ_MODELS_DEFAULT/$model_name"
+            if [[ ! -e "$target" ]]; then
+                ln -sf "$model_dir" "$target"
+                echo "  Linked model: $model_name → $PX4_GZ_MODELS_DEFAULT/"
+            fi
+        done
+    fi
+fi
 
 # ── Launch (exec = clean Ctrl-C forwarding) ───────────────────────────────────
 cd "$PX4_ROOT"
