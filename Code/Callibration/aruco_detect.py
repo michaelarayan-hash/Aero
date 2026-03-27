@@ -27,21 +27,9 @@ import numpy as np
 
 # ── Registry ─────────────────────────────────────────────────────────────────
 REGISTRY = {
-    "4x4_50":            cv2.aruco.DICT_4X4_50,
-    "4x4_100":           cv2.aruco.DICT_4X4_100,
-    "4x4_250":           cv2.aruco.DICT_4X4_250,
     "4x4_1000":          cv2.aruco.DICT_4X4_1000,
-    "5x5_50":            cv2.aruco.DICT_5X5_50,
-    "5x5_100":           cv2.aruco.DICT_5X5_100,
-    "5x5_250":           cv2.aruco.DICT_5X5_250,
     "5x5_1000":          cv2.aruco.DICT_5X5_1000,
-    "6x6_50":            cv2.aruco.DICT_6X6_50,
-    "6x6_100":           cv2.aruco.DICT_6X6_100,
-    "6x6_250":           cv2.aruco.DICT_6X6_250,
     "6x6_1000":          cv2.aruco.DICT_6X6_1000,
-    "7x7_50":            cv2.aruco.DICT_7X7_50,
-    "7x7_100":           cv2.aruco.DICT_7X7_100,
-    "7x7_250":           cv2.aruco.DICT_7X7_250,
     "7x7_1000":          cv2.aruco.DICT_7X7_1000,
     "aruco_original":    cv2.aruco.DICT_ARUCO_ORIGINAL,
     "cv_apriltag_16h5":  cv2.aruco.DICT_APRILTAG_16h5,
@@ -130,18 +118,27 @@ def estimate_pose(corners, mtx, dist, obj_pts):
 
 
 # ── CSV ───────────────────────────────────────────────────────────────────────
-def save_csv(path, dict_name, marker_id, est_mm, real_mm):
-    err = est_mm - real_mm
-    pct = abs(err) / real_mm * 100 if real_mm else float("inf")
+def save_csv(path, dict_name, marker_id, est_x, est_y, est_z, real_mm):
+    est_mm = float(np.linalg.norm([est_x, est_y, est_z]))
+    err    = est_mm - real_mm
+    pct    = abs(err) / real_mm * 100 if real_mm else float("inf")
     exists = os.path.isfile(path)
     with open(path, "a", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=["dict","id","est_mm","real_mm","err_mm","err_pct"])
+        w = csv.DictWriter(f, fieldnames=[
+            "dict", "id",
+            "est_x", "est_y", "est_z", "est_mm",
+            "real_mm", "err_mm", "err_pct",
+        ])
         if not exists:
             w.writeheader()
-        w.writerow({"dict": dict_name, "id": marker_id,
-                    "est_mm": round(est_mm, 2), "real_mm": round(real_mm, 2),
-                    "err_mm": round(err, 2), "err_pct": round(pct, 2)})
-    return err, pct
+        w.writerow({
+            "dict": dict_name, "id": marker_id,
+            "est_x":   round(est_x, 2), "est_y": round(est_y, 2),
+            "est_z":   round(est_z, 2), "est_mm": round(est_mm, 2),
+            "real_mm": round(real_mm, 2),
+            "err_mm":  round(err, 2),   "err_pct": round(pct, 2),
+        })
+    return err, pct, est_mm
 
 
 # ── Drawing ───────────────────────────────────────────────────────────────────
@@ -286,16 +283,22 @@ def main():
             for res in last:
                 rvecs, tvecs = estimate_pose(res["corners"], mtx, dist, obj_pts)
                 for i, mid in enumerate(res["ids"]):
-                    est = float(np.linalg.norm(tvecs[i]))
-                    print(f"  [{res['name']}] ID{mid[0]}  est={est:.2f}mm")
-                    raw_in = input("  True distance (mm, blank=skip): ")
-                    if not raw_in.strip(): continue
+                    tvec = tvecs[i]
+                    ex, ey, ez = float(tvec[0]), float(tvec[1]), float(tvec[2])
+                    est_mm = float(np.linalg.norm(tvec))
+                    print(f"\n  [{res['name']}] ID{mid[0]}")
+                    print(f"  Estimated  x={ex:+.1f}  y={ey:+.1f}  z={ez:+.1f}  dist={est_mm:.1f}  (mm)")
+                    raw_in = input("  True straight-line distance (mm, blank=skip): ")
+                    if not raw_in.strip():
+                        print("  Skipped."); continue
                     try:
-                        err, pct = save_csv(args.csv, res["name"], mid[0], est, float(raw_in))
+                        err, pct, est = save_csv(
+                            args.csv, res["name"], mid[0],
+                            ex, ey, ez, float(raw_in),
+                        )
                         print(f"  Error: {err:+.2f}mm ({pct:.2f}%)  -> {args.csv}")
                     except ValueError:
                         print("  Invalid input.")
-
     if proc: proc.terminate()
     elif cap: cap.release()
     cv2.destroyAllWindows()
