@@ -26,7 +26,7 @@ import cv2
 import numpy as np
 
 # ── Registry ─────────────────────────────────────────────────────────────────
-REGISTRY = {
+REGISTRY = {				
     "4x4_1000":          cv2.aruco.DICT_4X4_1000,
     "5x5_1000":          cv2.aruco.DICT_5X5_1000,
     "6x6_1000":          cv2.aruco.DICT_6X6_1000,
