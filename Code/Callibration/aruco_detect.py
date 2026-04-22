@@ -308,6 +308,8 @@ def main():
                         z_pct = (z_err / true_z_mm * 100.0) if true_z_mm != 0 else float("inf")
 
                         print(f"  Z error: {z_err:+.2f} mm ({z_pct:.2f}%)")
+                        save_csv(args.csv, res["name"], mid[0], ex, ey, ez, true_z_mm)
+                        print(f"  Saved to {args.csv}")
                     except ValueError:
                         print("  Invalid input.")
 
