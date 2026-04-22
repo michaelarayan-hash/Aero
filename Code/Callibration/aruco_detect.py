@@ -288,7 +288,7 @@ def main():
             for res in last:
                 rvecs, tvecs = estimate_pose(res["corners"], mtx, dist, obj_pts)
                 for i, mid in enumerate(res["ids"]):
-                    tvec = tvecs[i]
+                    tvec = tvecs[i].flatten()
                     ex, ey, ez = float(tvec[0]), float(tvec[1]), float(tvec[2])
                     z_est_mm = ez
 
