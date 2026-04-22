@@ -90,13 +90,15 @@ def build_detectors(names, use_new_api):
 
 
 def detect_all(gray, detectors, use_new_api):
+    small = cv2.resize(gray, (gray.shape[1] // 2, gray.shape[0] // 2))  # shrink
     results = []
     for d in detectors:
         if use_new_api:
-            corners, ids, _ = d["det"].detectMarkers(gray)
+            corners, ids, _ = d["det"].detectMarkers(small)  # detect on small
         else:
-            corners, ids, _ = cv2.aruco.detectMarkers(gray, d["ad"], parameters=d["pa"])
+            corners, ids, _ = cv2.aruco.detectMarkers(small, d["ad"], parameters=d["pa"])
         if ids is not None and len(ids):
+            corners = [c * 2.0 for c in corners]  # scale corners back up to full res
             results.append({"corners": corners, "ids": ids,
                              "name": d["name"], "colour": d["colour"]})
     return results
