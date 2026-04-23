@@ -1,0 +1,22 @@
+services:
+  sim:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    image: aero-sim:latest
+    volumes:
+      - px4-build:/root/PX4-Autopilot        # PX4 source + build (persisted across runs)
+      - ..:/workspace                         # repo bind-mount (live edits from host IDE)
+      - /tmp/.X11-unix:/tmp/.X11-unix         # X11 socket — Linux only, ignored on Win/Mac
+    environment:
+      - DISPLAY=${DISPLAY}
+      - APPIMAGE_EXTRACT_AND_RUN=1            # QGC AppImage runs without FUSE
+      - GZ_SIM_RESOURCE_PATH=/workspace/Simulation/models
+    ports:
+      - "14540:14540/udp"    # MAVSDK offboard scripts (if run on host)
+      - "14550:14550/udp"    # QGroundControl (if run on host)
+    stdin_open: true
+    tty: true
+
+volumes:
+  px4-build:
