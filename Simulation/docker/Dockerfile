@@ -1,6 +1,6 @@
 FROM ubuntu:24.04
 
-# Suppress interactive apt prompts throughout build and in setup.sh
+# Suppress interactive apt prompts throughout build and in inner setup scripts
 ENV DEBIAN_FRONTEND=noninteractive
 # Makes QGroundControl AppImage bypass FUSE (required in Docker without --privileged)
 ENV APPIMAGE_EXTRACT_AND_RUN=1
@@ -8,11 +8,13 @@ ENV APPIMAGE_EXTRACT_AND_RUN=1
 ENV PATH="/root/.local/bin:$PATH"
 
 # ── 1. Base packages ──────────────────────────────────────────────────────────
+# dos2unix guards against Windows clones with core.autocrlf=true.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates curl git gnupg lsb-release wget sudo \
     xauth \
     libfuse2 \
     python3 python3-pip \
+    dos2unix \
     && rm -rf /var/lib/apt/lists/*
 
 # ── 2. Gazebo Harmonic ────────────────────────────────────────────────────────
@@ -27,9 +29,6 @@ RUN curl -sSL https://packages.osrfoundation.org/gazebo.gpg \
     && rm -rf /var/lib/apt/lists/*
 
 # ── 3. PX4 build toolchain ────────────────────────────────────────────────────
-# Installs cmake, ninja, gcc/g++ and other build essentials.
-# PX4's ubuntu.sh (run by setup.sh on first container start) installs remaining
-# runtime deps (Python packages, simulation-specific tools) after cloning PX4.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     astyle build-essential cmake cppcheck \
     file g++ gcc gdb \
@@ -41,16 +40,30 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # ── 4. uv ─────────────────────────────────────────────────────────────────────
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# ── 5. Python project deps ────────────────────────────────────────────────────
-# Pre-install from requirements.txt so algorithm scripts work immediately.
-# Build context is Simulation/ so requirements.txt is at the root of context.
+# ── 5. PX4 source + runtime deps + SITL build ─────────────────────────────────
+# Pin PX4 by overriding PX4_REF at build time:
+#   docker compose build --build-arg PX4_REF=v1.15.2
+ARG PX4_REF=main
+RUN git clone --depth 1 --branch ${PX4_REF} --recurse-submodules --shallow-submodules \
+        https://github.com/PX4/PX4-Autopilot.git /root/PX4-Autopilot \
+    && bash /root/PX4-Autopilot/Tools/setup/ubuntu.sh --no-nuttx \
+    && cd /root/PX4-Autopilot && make px4_sitl_default \
+    && rm -rf /var/lib/apt/lists/*
+
+# ── 6. QGroundControl ─────────────────────────────────────────────────────────
+RUN wget -q -O /root/QGroundControl.AppImage \
+        https://github.com/mavlink/qgroundcontrol/releases/latest/download/QGroundControl-x86_64.AppImage \
+    && chmod +x /root/QGroundControl.AppImage
+
+# ── 7. Project Python deps ────────────────────────────────────────────────────
+# Installed after ubuntu.sh so our pinned versions win any conflicts.
 COPY requirements.txt /tmp/requirements.txt
 RUN pip3 install --break-system-packages -r /tmp/requirements.txt \
     && rm /tmp/requirements.txt
 
-# ── 6. Entrypoint ─────────────────────────────────────────────────────────────
+# ── 8. Entrypoint ─────────────────────────────────────────────────────────────
 COPY docker/entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+RUN dos2unix /entrypoint.sh && chmod +x /entrypoint.sh
 
 WORKDIR /workspace/Simulation
 ENTRYPOINT ["/entrypoint.sh"]
