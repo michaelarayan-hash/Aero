@@ -38,6 +38,9 @@ coverage.xml
 *.env
 secrets.py
 
+# Exception: commit .env.example as template
+!.env.example
+
 
 # Jupyter Notebooks
 .ipynb_checkpoints
