@@ -1,0 +1,26 @@
+# Python
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+
+# Virtual environments
+.venv/
+venv/
+
+# Test cache
+.pytest_cache/
+
+# Calibration data (large, not needed for sim)
+Code/Callibration/calib_images/
+Code/Callibration/undistorted/
+
+# Git
+.git/
+.worktrees/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets
+.env
