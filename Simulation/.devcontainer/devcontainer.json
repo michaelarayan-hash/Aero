@@ -1,0 +1,18 @@
+{
+  "name": "Aero Simulation",
+  "dockerComposeFile": "../docker-compose.yml",
+  "service": "sim",
+  "workspaceFolder": "/workspace",
+  "remoteUser": "root",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.pylance"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/bin/python3"
+      }
+    }
+  }
+}
