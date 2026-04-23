@@ -4,11 +4,16 @@ services:
       context: .
       dockerfile: docker/Dockerfile
     image: aero-sim:latest
+    # env_file loads .env directly into the container. We do NOT use
+    # ${DISPLAY} interpolation in `environment:` because Compose resolves that
+    # from the host shell's env first, which on Windows (Git Bash, WSL) is
+    # often a stale `:0` or `127.0.0.1:0.0` that shadows the .env value.
+    env_file:
+      - .env
     volumes:
       - ..:/workspace                         # repo bind-mount (live edits from host IDE)
       - /tmp/.X11-unix:/tmp/.X11-unix         # X11 socket — Linux only, ignored on Win/Mac
     environment:
-      - DISPLAY=${DISPLAY}
       - APPIMAGE_EXTRACT_AND_RUN=1            # QGC AppImage runs without FUSE
       - GZ_SIM_RESOURCE_PATH=/workspace/Simulation/models
     ports:
