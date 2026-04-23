@@ -19,7 +19,7 @@ from connection_test import connect_drone_ctx, read_telemetry
 
 from mavsdk.action import ActionError
 
-TAKEOFF_ALTITUDE_M = 5.0
+TAKEOFF_ALTITUDE_M = 1000.0
 IN_AIR_TIMEOUT_SEC = 30   # max wait to become airborne after takeoff command
 LAND_TIMEOUT_SEC = 60     # max wait to touch down after land command
 
