@@ -4,8 +4,8 @@ set -euo pipefail
 # ── Refresh world/model symlinks on every start ───────────────────────────────
 # Custom .sdf worlds and model directories in the bind-mounted repo are symlinked
 # into PX4's directories so Gazebo can find them without PX4_GZ_WORLDS overrides.
-PX4_WORLDS="/root/PX4-Autopilot/Tools/simulation/gz/worlds"
-PX4_MODELS="/root/PX4-Autopilot/Tools/simulation/gz/models"
+PX4_WORLDS="$HOME/PX4-Autopilot/Tools/simulation/gz/worlds"
+PX4_MODELS="$HOME/PX4-Autopilot/Tools/simulation/gz/models"
 
 if [[ -d "$PX4_WORLDS" && -d /workspace/Simulation/worlds ]]; then
     for world in /workspace/Simulation/worlds/*.sdf; do

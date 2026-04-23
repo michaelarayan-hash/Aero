@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(docker --version)",
+      "Bash(docker compose *)",
+      "Bash(tasklist //FI \"IMAGENAME eq vcxsrv.exe\")",
+      "Bash(docker exec simulation-sim-1 *)",
+      "Bash(docker volume *)",
+      "Bash(grep -v \"^$\")",
+      "Bash(git *)",
+      "Bash(docker image *)",
+      "Bash(docker builder *)",
+      "Bash(docker system *)"
+    ]
+  }
+}
