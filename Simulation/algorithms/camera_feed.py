@@ -37,6 +37,7 @@ if GZ_PYTHON not in sys.path:
 try:
     from gz.transport13 import Node
     from gz.msgs10.image_pb2 import Image as GzImage
+    
 except ImportError as e:
     print(f"[ERROR] gz-transport13 / gz-msgs10 not found: {e}")
     print("  Install: sudo apt-get install python3-gz-transport13 python3-gz-msgs10")
@@ -69,11 +70,7 @@ MARKER_OBJ_POINTS = np.array([
     [-_half, -_half, 0],
 ], dtype=np.float32)
 
-# Camera topic template
-TOPIC_TEMPLATE = (
-    "/world/{world}/model/{vehicle}_0"
-    "/link/camera_link/sensor/camera/image"
-)
+
 
 # Pixel format → (dtype, channels)
 _FMT = {
@@ -193,64 +190,6 @@ def append_csv_row(estimate_mm, real_mm):
 
 
 # ── SimCamera ─────────────────────────────────────────────────────────────────
-
-class SimCamera:
-    """
-    Thread-safe Gazebo camera subscriber.  call read() to get the latest BGR frame.
-    Same interface as cv2.VideoCapture so it can be used as a drop-in.
-    """
-
-    def __init__(self, world: str = config.WORLD, vehicle: str = config.VEHICLE):
-        self.topic  = TOPIC_TEMPLATE.format(world=world, vehicle=vehicle)
-        self._frame: np.ndarray | None = None
-        self._lock  = threading.Lock()
-        self._node: Node | None = None
-        self._running = False
-
-    def start(self):
-        self._node = Node()
-        self._node.subscribe(GzImage, self.topic, self._on_image)
-        self._running = True
-        print(f"[SimCamera] Subscribed to {self.topic}")
-
-    def stop(self):
-        if self._node and self._running:
-            self._node.unsubscribe(self.topic)
-            self._running = False
-
-    def read(self) -> tuple[bool, np.ndarray | None]:
-        """Return (ok, bgr_frame) — same interface as cv2.VideoCapture.read()."""
-        with self._lock:
-            if self._frame is None:
-                return False, None
-            return True, self._frame.copy()
-
-    def wait_for_frame(self, timeout: float = 15.0) -> bool:
-        deadline = time.time() + timeout
-        while time.time() < deadline:
-            with self._lock:
-                if self._frame is not None:
-                    return True
-            time.sleep(0.05)
-        return False
-
-    def _on_image(self, msg: GzImage):
-        fmt = _FMT.get(msg.pixel_format_type)
-        if fmt is None:
-            return
-        dtype, channels = fmt
-        raw = np.frombuffer(msg.data, dtype=dtype)
-
-        if channels == 1:
-            img = raw.reshape((msg.height, msg.width))
-            bgr = np.stack([img, img, img], axis=-1)
-        else:
-            img = raw.reshape((msg.height, msg.width, channels))
-            # gz publishes RGB; OpenCV expects BGR
-            bgr = img[:, :, ::-1].copy()
-
-        with self._lock:
-            self._frame = bgr
 
 
 # ── Standalone viewer with ArUco detection ────────────────────────────────────
