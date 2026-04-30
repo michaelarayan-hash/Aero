@@ -155,7 +155,7 @@ python3 sim.py --world forest
 python3 sim.py --world forest --gui
 
 # Different world and vehicle
-python3 sim.py --world aruco --vehicle x500_depth --gui
+python3 sim.py --world aruco --vehicle x500_mono_cam_down --gui
 
 # External world directory
 PX4_GZ_WORLDS=~/PX4-gazebo-models/worlds python3 sim.py --world baylands --gui
@@ -184,7 +184,7 @@ killing the server.
 # Terminal 1 — PX4 SITL server (blocking, wait for "Gazebo world is ready")
 cd ~/Aero/Simulation
 ./launch_sim.sh forest                         # forest world, default vehicle
-./launch_sim.sh aruco x500_depth               # aruco world + depth camera
+./launch_sim.sh aruco x500_mono_cam_down               # aruco world + depth camera
 PX4_GZ_WORLDS=~/PX4-gazebo-models/worlds \
     ./launch_sim.sh baylands                   # external world
 
@@ -266,18 +266,7 @@ python3 algorithms/camera_feed.py --world forest
 # Press Q to quit
 ```
 
-Importable in algorithm scripts:
 
-```python
-from algorithms.camera_feed import SimCamera
-
-cam = SimCamera(world="forest")
-cam.start()
-cam.wait_for_frame()          # block until first frame
-
-ok, frame = cam.read()        # returns (bool, BGR numpy array) — same as cv2.VideoCapture.read()
-cam.stop()
-```
 
 > `camera_feed.py` uses the system `gz.transport13` / `gz.msgs10` packages (installed with Gazebo
 > Harmonic). These are not in the venv — the script adds `/usr/lib/python3/dist-packages` to
@@ -303,14 +292,3 @@ algorithms/
 | UDP 14540 | MAVSDK / offboard algorithm scripts |
 | UDP 14550 | QGroundControl (auto-detected) |
 
-### Adding Algorithm Scripts
-
-```python
-# algorithms/my_script.py
-import sys
-from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-import config
-from connection_test import connect_drone_ctx, read_telemetry
-```
