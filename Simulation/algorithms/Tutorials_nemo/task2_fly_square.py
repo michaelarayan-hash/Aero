@@ -44,7 +44,7 @@ async def main():
             await drone.action.takeoff()
             await asyncio.wait_for(_reached_heigth(alt, logger), timeout=15)
 
-        except TimeoutError as e:
+        except asyncio.TimeoutError as e:
             print('[ERROR] Failed to reach takeoff altittude')
             await drone.action.land()
             sys.exit(1)
@@ -52,15 +52,17 @@ async def main():
     print(f"[TAKEOFF] Reached {alt} m.")
 
     print("[MISSION] flying")
+    try:
+        await asyncio.wait_for(fly_square(drone=drone), timeout=10)
+    except asyncio.TimeoutError as e:
+        print('[MISSION] Done Flying')
 
-    await asyncio.wait_for()
-
-    await asyncio.sleep(2)
-    await drone.action.land()
+    await drone.offboard.stop()
+    await drone.action.land()  
     await asyncio.sleep(3)
     sys.exit()
 
-async def fly_square(drone: System, logger: DroneLogger):
+async def fly_square(drone: System):
         
     await drone.offboard.set_velocity_ned(VelocityNedYaw(0.0, 0.0, 0.0, 0.0))
 
@@ -87,7 +89,9 @@ async def fly_square(drone: System, logger: DroneLogger):
     while True:
         for name, NED in ned_map.items():
             print(f'Flying {name}')
-            await drone.offboard.set_velocity_ned(VelocityNedYaw(NED))
+
+            print(NED)
+            await drone.offboard.set_velocity_ned(VelocityNedYaw(NED[0], NED[1], NED[2], NED[3]))
             await asyncio.sleep(2)
     
 
