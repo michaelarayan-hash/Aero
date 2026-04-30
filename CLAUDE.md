@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-Camera calibration and ArUco marker verification suite targeting Raspberry Pi HQ Camera and standard USB cameras. Three-step pipeline: capture → calibrate → verify.
+Camera calibration and ArUco marker verification suite targeting Raspberry Pi HQ Camera and standard USB cameras. Three-step pipeline: capture → calibrate → verify. `aruco_detect.py` scans multiple ArUco/AprilTag dictionaries simultaneously with pose estimation.
 
 ## Setup
 
@@ -26,8 +26,12 @@ python3 Code/Callibration/1_capture_images.py
 # Step 2: Process images → calibration.npz
 python Code/Callibration/2_calibrate.py
 
-# Step 3: Live ArUco verification (Q=quit, V=manual distance verify)
-python Code/Callibration/3_aruco_test.py
+# Step 3: Multi-dictionary ArUco + AprilTag detector with pose estimation
+python Code/Callibration/aruco_detect.py                          # scan all dictionaries
+python Code/Callibration/aruco_detect.py --dicts 4x4_50 6x6_250  # specific families
+python Code/Callibration/aruco_detect.py --dicts cv_apriltag_36h11 --marker-size 150
+python Code/Callibration/aruco_detect.py --list-dicts             # show all names and exit
+# Controls: Q=quit, V=verify distance (saves to CSV), D=toggle legend (all/detected only)
 ```
 
 ## Architecture
@@ -39,12 +43,12 @@ python Code/Callibration/3_aruco_test.py
                                 ↓
 2_calibrate.py       →  calibration.npz (K matrix, distortion, RMS)
                                 ↓
-3_aruco_test.py      →  aruco_distance_results.csv (live distance measurements)
+aruco_detect.py      →  aruco_results.csv (multi-dict detection, pose estimation)
 ```
 
 ### Camera Backend Pattern
 
-All three scripts share the same dual-backend pattern:
+All scripts share the same dual-backend pattern:
 - **Primary**: `rpicam-vid` subprocess piping raw YUV420 frames (Raspberry Pi HQ Camera)
 - **Fallback**: `cv2.VideoCapture(0)` for standard USB cameras
 
@@ -54,16 +58,37 @@ All three scripts share the same dual-backend pattern:
 |------|-----------|---------|------------|
 | `1_capture_images.py` | Resolution | 1280×720, 30fps | Camera capability |
 | `2_calibrate.py` | Checkerboard | 10×7 inner corners, 23mm squares | Printed board |
-| `3_aruco_test.py` | `MARKER_SIZE_MM` | 100mm | Printed marker |
-| `3_aruco_test.py` | Dictionary | `DICT_4X4_50` | Printed marker type |
+| `aruco_detect.py` | `--marker-size` | 100mm | Printed marker |
+| `aruco_detect.py` | `--dicts` | all (9 families) | Printed marker type |
+| `aruco_detect.py` | `--fps` | 15 | Camera / performance target |
 
 ### Calibration Output (`calibration.npz`)
 
 Contains: camera matrix `K`, distortion coefficients `dist`, RMS reprojection error, `image_size`, `checkerboard` dims. When resolution differs from calibration, `3_aruco_test.py` scales the camera matrix dynamically.
 
-### Verification Logging
+### `aruco_detect.py` — Multi-Dictionary Detector
 
-`3_aruco_test.py` saves CSV records to `aruco_distance_results.csv` when V is pressed, capturing measured vs. actual distance and error percentage.
+Drop-in alternative to `3_aruco_test.py` that searches all ArUco/AprilTag families at once. Detects on a half-resolution frame for speed, then scales corners back to full resolution before pose estimation.
+
+**Supported dictionaries** (pass names to `--dicts`):
+
+| Name | Family |
+|------|--------|
+| `4x4_1000`, `5x5_1000`, `6x6_1000`, `7x7_1000` | Standard ArUco |
+| `aruco_original` | Original ArUco |
+| `cv_apriltag_16h5`, `cv_apriltag_25h9`, `cv_apriltag_36h10`, `cv_apriltag_36h11` | AprilTag (OpenCV) |
+
+**Key CLI flags:**
+
+| Flag | Default | Purpose |
+|------|---------|---------|
+| `--dicts` | all | Families to enable |
+| `--marker-size` | 100mm | Physical marker side length |
+| `--calib` | `calibration.npz` | Calibration file |
+| `--fps` | 15 | Target frame rate |
+| `--csv` | `aruco_results.csv` | Output log file |
+
+Saves CSV columns: `dict`, `id`, `est_x`, `est_y`, `est_z`, `real_mm`, `err_mm`, `err_pct` (written on V keypress).
 
 ---
 
@@ -168,6 +193,11 @@ cd ~/Aero/Simulation && source .venv/bin/activate
 python3 algorithms/takeoff_land.py             # takeoff to 5 m, hover, land
 python3 algorithms/takeoff_land.py --altitude 10.0
 python3 connection_test.py                     # telemetry snapshot only
+
+# Precision auto-landing (requires tag_demo world + x500_mono_cam_down vehicle)
+python3 algorithms/auto_land.py --world tag_demo
+python3 algorithms/auto_land.py --world tag_demo --altitude 3.0
+# Controls: Q=quit
 ```
 
 #### Manual launch (advanced)
@@ -294,6 +324,7 @@ algorithms/
   __init__.py            — documents sys.path import pattern
   takeoff_land.py        — arm → takeoff → hover → land → disarm
   camera_feed.py         — SimCamera: gz-transport subscriber, cv2-compatible read() interface
+  auto_land.py           — closed-loop precision landing via ArUco pose estimation + velocity control
 ```
 
 ### MAVLink Ports

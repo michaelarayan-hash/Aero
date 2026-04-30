@@ -127,7 +127,7 @@ def save_csv(path, dict_name, marker_id, est_x, est_y, est_z, real_mm):
     exists = os.path.isfile(path)
 
     with open(path, "a", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=[
+        w = csv.DictWriter(f, fieldnamebs=[
             "dict", "id",
             "est_x", "est_y", "est_z",
             "real_mm", "err_mm", "err_pct",
