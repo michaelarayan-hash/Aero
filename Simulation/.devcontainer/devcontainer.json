@@ -3,7 +3,7 @@
   "dockerComposeFile": "../docker-compose.yml",
   "service": "sim",
   "workspaceFolder": "/workspace",
-  "remoteUser": "root",
+  "remoteUser": "dev",
   "customizations": {
     "vscode": {
       "extensions": [

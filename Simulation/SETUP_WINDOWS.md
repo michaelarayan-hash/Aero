@@ -1,6 +1,6 @@
 # Windows Setup Guide
 
-This guide sets up the Aero simulation stack on Windows using Docker Desktop and VcXsrv for X11 display forwarding.
+Run the Aero simulation stack on Windows using Docker Desktop and VcXsrv. The image is self-contained — PX4, Gazebo Harmonic, QGroundControl and all Python deps are baked in at `docker compose build` time, so `docker compose up` is instant.
 
 ## Prerequisites
 
@@ -15,6 +15,19 @@ During installation:
 Download and install from https://sourceforge.net/projects/vcxsrv/
 
 VcXsrv lets GUI apps running inside the container (Gazebo, QGroundControl) display windows on your Windows desktop.
+
+### 3. Git line-ending config
+Shell scripts in this repo must be checked out with LF endings. The `.gitattributes` handles this automatically, **but only if you clone with a sane config**. Before cloning, run once:
+
+```bash
+git config --global core.autocrlf input
+```
+
+If you already cloned with `core.autocrlf=true` and the container crashes with `/usr/bin/env: 'bash\r': No such file or directory`, re-normalize the working tree:
+
+```bash
+git add --renormalize .
+```
 
 ## First-Time Setup
 
@@ -41,8 +54,6 @@ If you missed the prompt, add the rule manually:
 
 ### Step 3: Clone the repository
 
-Open a terminal (PowerShell, Git Bash, or WSL):
-
 ```bash
 git clone <repo-url>
 cd Aero/Simulation
@@ -62,31 +73,35 @@ DISPLAY=host.docker.internal:0.0
 
 Leave it as-is. This tells the container to forward its display to your VcXsrv instance.
 
-### Step 5: Build the Docker image
+### Step 5: Build the image
 
 ```bash
 docker compose build
 ```
 
-This downloads Ubuntu 24.04, Gazebo Harmonic, the PX4 toolchain, and Python dependencies.
-**Expected time:** 5–10 minutes (image is ~3–4 GB).
+This installs Ubuntu 24.04, Gazebo Harmonic, the PX4 toolchain, clones PX4-Autopilot, runs its setup script, builds the SITL binary, downloads QGroundControl, and installs the project Python deps — all into a single image.
+
+**Expected time:** 25–35 minutes. **Image size:** ~8–12 GB.
+
+You only do this once per PX4 version.
+
+To pin a specific PX4 release (recommended for reproducibility):
+
+```bash
+docker compose build --build-arg PX4_REF=v1.15.2
+```
 
 ## Running the Simulation
 
 ### Step 1: Start the container
 
 ```bash
-docker compose up
+docker compose up -d
 ```
 
-**First run only:** the container will automatically clone PX4-Autopilot and compile the SITL binaries.
-This takes **~20–30 minutes** and only happens once. Output streams to your terminal so you can follow progress.
-
-Subsequent runs start instantly.
+Starts instantly. The container stays up in the background.
 
 ### Step 2: Open a shell inside the container
-
-In a second terminal:
 
 ```bash
 docker compose exec sim bash
@@ -97,25 +112,41 @@ You are now inside the container at `/workspace/Simulation`.
 ### Step 3: Launch the simulation
 
 ```bash
-python3 sim.py --world tag_demo --gui
+python3 sim.py --world forest --gui
 ```
 
-- The Gazebo GUI window should appear on your Windows desktop (via VcXsrv)
-- QGroundControl opens as a second window
-- Press Ctrl-C in the first terminal to stop everything
+- PX4 SITL server starts, then QGroundControl opens as a window via VcXsrv
+- `--gui` adds the Gazebo 3D view (also via VcXsrv)
+- First launch of a specific vehicle (default `x500_mono_cam_down`) does a small incremental compile (~30–60s); later launches are instant
+- Ctrl-C in the shell stops everything
 
-### Step 4: Run algorithm scripts
+### Step 4: Run algorithms and camera feed
 
-In the same container shell (or a third terminal with `docker compose exec sim bash`):
+In the same container shell (or another `docker compose exec sim bash` terminal):
 
 ```bash
 python3 algorithms/takeoff_land.py
-python3 algorithms/tag_patrol.py
+python3 algorithms/camera_feed.py --world forest
+```
+
+Any algorithm in `algorithms/` works the same way.
+
+## Stopping / Resetting
+
+```bash
+docker compose down       # stop and remove the container (image stays)
+docker compose down -v    # also remove volumes (there are none, but future-proof)
+```
+
+To update PX4 or rebuild from scratch:
+
+```bash
+docker compose build --no-cache
 ```
 
 ## Troubleshooting
 
-### Gazebo window doesn't appear
+### Gazebo / QGC window doesn't appear
 
 - Check VcXsrv is running (system tray icon)
 - Verify "Disable access control" was checked in XLaunch
@@ -124,22 +155,17 @@ python3 algorithms/tag_patrol.py
 
 ### "Cannot connect to display" error
 
+Inside the container:
 ```bash
-# Inside the container, test X11 connectivity:
-xauth list
-echo $DISPLAY
+echo $DISPLAY       # should print host.docker.internal:0.0
+xauth list          # should not error
 ```
 
-If `DISPLAY` is empty, `.env` was not loaded — confirm the file exists and is not empty.
+If `DISPLAY` is empty, `.env` was not loaded — confirm the file exists next to `docker-compose.yml`.
 
-### First-run setup fails mid-way
+### Container exits with `/usr/bin/env: 'bash\r'`
 
-```bash
-# Inside the container:
-bash /workspace/Simulation/docker/setup.sh --reset
-```
-
-This wipes `/root/PX4-Autopilot` and reruns the full setup.
+Windows line endings on shell scripts. See the "Git line-ending config" prerequisite above — run `git add --renormalize .` and commit, or re-clone with `core.autocrlf=input`.
 
 ### Docker Desktop WSL 2 performance
 
@@ -153,4 +179,4 @@ Install the **Dev Containers** extension, then:
 2. Command Palette → **Dev Containers: Reopen in Container**
 3. VS Code attaches to the running container with full IntelliSense
 
-No additional configuration needed — `.devcontainer/devcontainer.json` is already set up.
+The devcontainer config opens at `/workspace`; `cd Simulation` before running `sim.py`.

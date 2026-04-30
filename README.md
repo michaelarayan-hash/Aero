@@ -7,7 +7,7 @@ This repository contains tools for camera calibration and verification using ArU
 *   Python 3.8+
 *   OpenCV compatible camera (e.g., Raspberry Pi HQ Camera)
 *   Printed Checkerboard (for calibration)
-*   Printed ArUco Marker (4x4, for verification)
+*   Printed ArUco Marker (any supported family, for verification)
 
 ## Setup
 
@@ -74,21 +74,34 @@ python Code/Callibration/2_calibrate.py
 *   **Output**: `calibration.npz` (contains intrinsic parameters)
 *   **Preview**: Undistorted sample images in `undistorted/`
 
-### Step 3: Verify Calibration with ArUco
+### Step 3: Detect ArUco Markers
 
-Verify the accuracy of the calibration by measuring the distance to a known ArUco marker.
+Detect ArUco and AprilTag markers with live pose estimation across multiple dictionary families simultaneously.
 
-**Important**: 
+**Important**:
 *   Ensure `calibration.npz` exists (from Step 2).
-*   Edit `Code/Callibration/3_aruco_test.py` if your marker size is not **50mm**.
+*   Pass `--marker-size` if your marker is not **100mm**.
 
 ```bash
-python Code/Callibration/3_aruco_test.py
+# Scan all supported dictionaries
+python Code/Callibration/aruco_detect.py
+
+# Specific families only
+python Code/Callibration/aruco_detect.py --dicts 4x4_1000 cv_apriltag_36h11
+
+# Custom marker size
+python Code/Callibration/aruco_detect.py --marker-size 150
+
+# List all supported dictionary names
+python Code/Callibration/aruco_detect.py --list-dicts
 ```
 
 *   **Controls**:
     *   **Q**: Quit
-    *   **V**: Verify distance (prompts for true measured distance to calculate error %)
+    *   **V**: Verify distance (prompts for true Z distance, saves error to `aruco_results.csv`)
+    *   **D**: Toggle legend between all dictionaries / detected only
+
+**Supported families**: `4x4_1000`, `5x5_1000`, `6x6_1000`, `7x7_1000`, `aruco_original`, `cv_apriltag_16h5`, `cv_apriltag_25h9`, `cv_apriltag_36h10`, `cv_apriltag_36h11`
 
 ## Troubleshooting
 

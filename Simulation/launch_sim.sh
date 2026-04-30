@@ -108,5 +108,8 @@ if [[ "$WORLDS_DIR" != "$DEFAULT_WORLDS_DIR" ]]; then
 fi
 
 # ── Launch (exec = clean Ctrl-C forwarding) ───────────────────────────────────
+# HEADLESS=1 tells PX4's make target to skip auto-launching `gz sim -g` — sim.py
+# is the single owner of the GUI (spawns it only when --gui is passed). Without
+# this PX4 would launch its own GUI and sim.py would launch a second one.
 cd "$PX4_ROOT"
-exec env PX4_GZ_WORLD="$WORLD" PX4_GZ_WORLDS="$WORLDS_DIR" make px4_sitl "gz_${VEHICLE}"
+exec env HEADLESS=1 PX4_GZ_WORLD="$WORLD" PX4_GZ_WORLDS="$WORLDS_DIR" make px4_sitl "gz_${VEHICLE}"

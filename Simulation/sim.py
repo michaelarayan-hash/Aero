@@ -187,10 +187,12 @@ def main():
 
     # ── Step 3: launch QGroundControl ────────────────────────────────────────
     qgc = config.QGC_APPIMAGE
+    qgc_log = Path("/tmp/qgc.log")
     if qgc.exists():
-        print(f"Starting QGroundControl ({qgc})...")
+        print(f"Starting QGroundControl ({qgc})... (stderr → {qgc_log})")
+        qgc_log_fh = open(qgc_log, "w")
         procs.append(subprocess.Popen(
-            [str(qgc)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+            [str(qgc)], stdout=qgc_log_fh, stderr=subprocess.STDOUT
         ))
     else:
         print(f"[WARN] QGroundControl not found at {qgc} — skipping.")
