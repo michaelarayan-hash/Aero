@@ -118,7 +118,6 @@ def estimate_pose(corners, mtx, dist, obj_pts):
         rvecs.append(rvec); tvecs.append(tvec)
     return rvecs, tvecs
 
-
 # ── CSV ───────────────────────────────────────────────────────────────────────
 def save_csv(path, dict_name, marker_id, est_x, est_y, est_z, real_mm):
     est_mm = float(est_z)   # use Z only
@@ -170,7 +169,6 @@ def draw_legend(frame, detectors, active):
         c = d["colour"] if d["name"] in active else tuple(v//4 for v in d["colour"])
         cv2.circle(frame, (x0+12, y), 5, c, -1)
         cv2.putText(frame, d["name"], (x0+22, y+4), cv2.FONT_HERSHEY_SIMPLEX, 0.36, c, 1)
-
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 def main():
@@ -320,3 +318,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
