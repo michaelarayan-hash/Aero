@@ -18,24 +18,39 @@ Connect to the drone and log telemetry for 15 seconds:
 - Velocity  
 - NED Euler angles
 
-### Task 2: Square Flight in NED Frame (Velocity Commands)
+### Task 2: Basic Takeoff and Landing
+
+Arm the drone, take off, hover, and land:
+1. Connect to drone
+2. Check health (global position and home position OK)
+3. Arm
+4. Set takeoff altitude to 5m and take off
+5. Wait until target altitude is reached (30s timeout)
+6. Hover for 10 seconds
+7. Land and wait until disarmed
+
+### Task 3: Square Flight in NED Frame (Velocity Commands)
 
 Fly in a square using NED velocity commands:
 1. Connect to drone
-2. Arm
-3. Takeoff
-4. Switch to offboard mode (using `offboard_velocity_ned`)
-5. Fly 2 m/s in each direction (north, east, south, west) for 2 seconds per leg
-6. Total flight time: 20 seconds
-7. Land
+2. Check health
+3. Arm and take off to 5m
+4. Switch to offboard mode using `VelocityNedYaw`
+5. Fly each leg at 2.5 m/s for 5 seconds — north (0°), east (90°), south (180°), west (270°) — with a hover pause between each leg
+6. Return to launch
 
-### Task 3: Square Flight in Body Frame (GPS Coordinates)
+### Task 4: Square Flight in Body Frame (Velocity Commands)
 
-Fly in a square using body frame and GPS coordinates.
+Fly using body frame velocity commands:
+1. Connect to drone
+2. Check health
+3. Arm and take off to 5m
+4. Switch to offboard mode using `VelocityBodyYawspeed`
+5. Fly forward then right at 2.5 m/s for 10 seconds each, with a 90°/s yaw rate
 
 **Key learning:** Understand the difference between body and NED frames.
 
-### Task 4: AprilTag Detection and Landing
+### Task 5: AprilTag Detection and Landing
 
 Detect and land on an AprilTag:
 1. Write a camera feed display loop
