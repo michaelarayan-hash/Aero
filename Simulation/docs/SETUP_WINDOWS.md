@@ -131,6 +131,16 @@ python3 algorithms/camera_feed.py --world forest
 
 Any algorithm in `algorithms/` works the same way.
 
+## Next Steps
+
+See [RUNNING_SIMULATION.md](RUNNING_SIMULATION.md) for:
+- Worlds (built-in, external, custom)
+- Vehicle variants
+- Camera feed setup
+- Algorithm scripts (takeoff, auto-landing, etc.)
+- MAVLink ports
+- Manual launch instructions
+
 ## Stopping / Resetting
 
 ```bash
