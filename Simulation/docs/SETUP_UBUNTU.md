@@ -7,9 +7,56 @@ PX4 SITL + Gazebo Harmonic + QGroundControl
 | Platform | Guide | Notes |
 |----------|-------|-------|
 | **Ubuntu 22.04 / 24.04** | Below (native) | Recommended; fastest |
-| **Ubuntu 20.04 / older** | Use Docker | `SETUP_WINDOWS.md` docker-compose works on Linux too |
-| **macOS** | Use Docker | `SETUP_WINDOWS.md` docker-compose with colima/OrbStack instead of Docker Desktop |
-| **Windows** | See `SETUP_WINDOWS.md` | Docker Desktop + WSL 2 + VcXsrv |
+| **Ubuntu 26.04+** | Below (Docker) | Native PX4 deps not yet packaged; Docker gives full GPU speed |
+| **Ubuntu 20.04 / older** | Use Docker | [SETUP_DOCKER.md](SETUP_DOCKER.md) |
+| **macOS** | Use Docker | [SETUP_DOCKER.md](SETUP_DOCKER.md) with colima/OrbStack instead of Docker Desktop |
+| **Windows** | See [SETUP_DOCKER.md](SETUP_DOCKER.md) | Docker Desktop + WSL 2 + VcXsrv |
+
+---
+
+## Ubuntu 26.04+ Docker Setup
+
+Ubuntu 26.04 ships with ROS 2 and Gazebo versions that conflict with the PX4 native setup script. Use Docker instead — the container runs Ubuntu 24.04 internally and is functionally identical to a native install.
+
+GPU passthrough gives the container direct hardware OpenGL access, so Gazebo runs at full speed (not the ~17% RTF you'd see with Windows software rendering).
+
+### 1. Create GPU passthrough override
+
+Create `docker-compose.override.yml` once in the `Simulation/` directory (it is gitignored — local to your machine):
+
+```bash
+cat > ~/Aero/Simulation/docker-compose.override.yml << 'EOF'
+services:
+  sim:
+    devices:
+      - /dev/dri:/dev/dri
+    group_add:
+      - video
+      - render
+EOF
+```
+
+Docker Compose automatically merges this file — no extra flags needed.
+
+### 2. Configure display
+
+```bash
+cp ~/Aero/Simulation/.env.example ~/Aero/Simulation/.env
+```
+
+Open `.env` and uncomment the Linux line. Verify `echo $DISPLAY` on your host matches — on Ubuntu 26 with Wayland + XWayland it is typically `:0`.
+
+### 3. Allow container X11 access (once per session)
+
+```bash
+xhost +local:
+```
+
+Add to `~/.bashrc` to avoid repeating this on every login.
+
+### 4. Build and run
+
+Follow [SETUP_DOCKER.md](SETUP_DOCKER.md) from **"Build the Docker Image"** onward. The GPU override is applied automatically.
 
 ---
 

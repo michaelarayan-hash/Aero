@@ -1,22 +1,61 @@
-# Windows Setup Guide
+# Docker-Based Setup (Windows / macOS / Older Ubuntu)
 
-Run the Aero simulation stack on Windows using Docker Desktop and VcXsrv. The image is self-contained — PX4, Gazebo Harmonic, QGroundControl and all Python deps are baked in at `docker compose build` time, so `docker compose up` is instant.
+Run the Aero simulation stack in Docker. The image is self-contained — PX4, Gazebo Harmonic, QGroundControl and all Python deps are baked in at `docker compose build` time, so `docker compose up` is instant.
 
 ## Prerequisites
 
-### 1. Docker Desktop
+Choose instructions for your platform:
+
+### Windows
+
+#### 1. Docker Desktop
 Download and install from https://www.docker.com/products/docker-desktop/
 
 During installation:
 - Select **WSL 2** backend (recommended over Hyper-V)
 - Enable "Use WSL 2 based engine" in Docker Desktop → Settings → General
 
-### 2. VcXsrv (X11 server for Windows)
+#### 2. VcXsrv (X11 server for Windows)
 Download and install from https://sourceforge.net/projects/vcxsrv/
 
 VcXsrv lets GUI apps running inside the container (Gazebo, QGroundControl) display windows on your Windows desktop.
 
-### 3. Git line-ending config
+### macOS
+
+#### 1. Docker Desktop
+Download and install from https://www.docker.com/products/docker-desktop/
+
+**Alternative** (lighter): Use [colima](https://github.com/abiosoft/colima) or [OrbStack](https://orbstack.dev/)
+
+#### 2. X11 Server (XQuartz)
+Install XQuartz from https://www.xquartz.org/
+
+XQuartz lets GUI apps running inside the container (Gazebo, QGroundControl) display windows on your Mac desktop.
+
+Update `.env` in the project root:
+```
+DISPLAY=host.docker.internal:0.0
+```
+
+### Older Ubuntu (20.04 or earlier)
+
+#### 1. Docker Engine
+Install Docker and Docker Compose:
+```bash
+curl -fsSL https://get.docker.com -o get-docker.sh && sh get-docker.sh
+sudo apt-get install -y docker-compose
+```
+
+Or use [Podman](https://podman.io/) as a Docker drop-in replacement.
+
+#### 2. X11 Server (already included)
+Most Linux desktops already have X11. No install needed. If headless, install:
+```bash
+sudo apt-get install -y x11-common
+```
+
+### 3. Git line-ending config (all platforms)
+
 Shell scripts in this repo must be checked out with LF endings. The `.gitattributes` handles this automatically, **but only if you clone with a sane config**. Before cloning, run once:
 
 ```bash
@@ -31,7 +70,7 @@ git add --renormalize .
 
 ## First-Time Setup
 
-### Step 1: Start VcXsrv
+### Windows: Start VcXsrv
 
 Open **XLaunch** from the Start menu and configure it:
 
@@ -42,7 +81,7 @@ Open **XLaunch** from the Start menu and configure it:
 > "Disable access control" allows the Docker container to connect to VcXsrv.
 > You can save the configuration as a shortcut for future launches.
 
-### Step 2: Allow VcXsrv through Windows Firewall
+### Windows: Allow VcXsrv through Windows Firewall
 
 When VcXsrv first launches, Windows will show a firewall prompt — click **Allow access** for both private and public networks.
 
@@ -52,28 +91,43 @@ If you missed the prompt, add the rule manually:
 3. Browse to `C:\Program Files\VcXsrv\vcxsrv.exe`
 4. Allow the connection → apply to all profiles → Finish
 
-### Step 3: Clone the repository
+### macOS: Start XQuartz
+
+After installing XQuartz, launch it from Applications → Utilities → XQuartz.
+
+Open XQuartz Preferences → Security and check **Allow connections from network clients**.
+
+Then in a terminal:
+```bash
+defaults write org.macosforge.xquartz.X11 nolisten_tcp 0
+killall X
+# Relaunch XQuartz
+```
+
+### All Platforms: Clone and Configure
+
+### All Platforms: Clone and Configure
 
 ```bash
 git clone <repo-url>
 cd Aero/Simulation
 ```
 
-### Step 4: Configure your .env file
+### Build the Docker Image
 
 ```bash
 cp .env.example .env
 ```
 
-Open `.env` — the first uncommented line should already be:
+Open `.env` — verify the first uncommented line:
 
 ```
 DISPLAY=host.docker.internal:0.0
 ```
 
-Leave it as-is. This tells the container to forward its display to your VcXsrv instance.
+Leave it as-is. This tells the container to forward its display to your X11 server.
 
-### Step 5: Build the image
+Then build:
 
 ```bash
 docker compose build
@@ -115,8 +169,8 @@ You are now inside the container at `/workspace/Simulation`.
 python3 sim.py --world forest --gui
 ```
 
-- PX4 SITL server starts, then QGroundControl opens as a window via VcXsrv
-- `--gui` adds the Gazebo 3D view (also via VcXsrv)
+- PX4 SITL server starts, then QGroundControl opens as a window via your X11 server (VcXsrv/XQuartz)
+- `--gui` adds the Gazebo 3D view (also via X11)
 - First launch of a specific vehicle (default `x500_mono_cam_down`) does a small incremental compile (~30–60s); later launches are instant
 - Ctrl-C in the shell stops everything
 
@@ -158,9 +212,20 @@ docker compose build --no-cache
 
 ### Gazebo / QGC window doesn't appear
 
+**Windows (VcXsrv):**
 - Check VcXsrv is running (system tray icon)
 - Verify "Disable access control" was checked in XLaunch
-- Check Windows Firewall allows VcXsrv (see Step 2)
+- Check Windows Firewall allows VcXsrv
+
+**macOS (XQuartz):**
+- Check XQuartz is running (Applications → Utilities → XQuartz)
+- Confirm XQuartz Preferences → Security: "Allow connections from network clients" is checked
+
+**Linux:**
+- Verify X11 is available: `echo $DISPLAY` (should not be empty)
+- If headless, ensure X11 forwarding is configured
+
+**All platforms:**
 - Confirm `.env` contains `DISPLAY=host.docker.internal:0.0`
 
 ### "Cannot connect to display" error
@@ -177,9 +242,18 @@ If `DISPLAY` is empty, `.env` was not loaded — confirm the file exists next to
 
 Windows line endings on shell scripts. See the "Git line-ending config" prerequisite above — run `git add --renormalize .` and commit, or re-clone with `core.autocrlf=input`.
 
-### Docker Desktop WSL 2 performance
+### Docker Desktop WSL 2 performance (Windows only)
 
 For best disk performance, clone the repo inside WSL 2 (`\\wsl$\Ubuntu\home\...`) rather than on the Windows filesystem (`C:\...`). Docker Desktop accesses WSL 2 paths much faster.
+
+### Podman instead of Docker (Linux)
+
+If using Podman, substitute `podman-compose` for `docker compose` in all commands:
+
+```bash
+podman-compose up -d
+podman-compose exec sim bash
+```
 
 ## VS Code Dev Container (optional)
 

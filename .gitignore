@@ -41,6 +41,9 @@ secrets.py
 # Exception: commit .env.example as template
 !.env.example
 
+# Docker local overrides (Linux GPU passthrough etc.) — never commit
+docker-compose.override.yml
+
 
 # Jupyter Notebooks
 .ipynb_checkpoints

@@ -1,6 +1,6 @@
 # Running the Simulation
 
-After completing [SETUP_UBUNTU.md](SETUP_UBUNTU.md) (native) or [SETUP_WINDOWS.md](SETUP_WINDOWS.md) (Docker), use this guide to run scenarios and algorithm tests.
+After completing [SETUP_UBUNTU.md](SETUP_UBUNTU.md) (native) or [SETUP_DOCKER.md](SETUP_DOCKER.md) (Docker), use this guide to run scenarios and algorithm tests.
 
 ## Quick Start
 
