@@ -3,6 +3,7 @@ import threading
 import time
 from pathlib import Path
 import numpy as np
+import cv2
 
 sys.path.insert(0, "/usr/lib/python3/dist-packages")
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -25,9 +26,13 @@ class SimCamera:
         self._frame = None
         self._lock = threading.Lock()
         self._node = Node()
+        print(f"Subscribing to camera topic: {topic}")
         self._node.subscribe(GzImage, topic, self._on_image)
 
     def _on_image(self, msg: GzImage):
+        '''Callback for incoming camera images
+        Converts the raw image data to a BGR OpenCV format and stores it as the latest frame.
+        '''
         fmt = _FMT.get(msg.pixel_format_type)
         if fmt is None:
             return

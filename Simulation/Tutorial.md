@@ -43,3 +43,16 @@ TASK 4: Fly in a square using Body frame
 =========================
 NOW WE UNDERSTAND BODY FRAME!!
 =========================
+
+
+TASK 5: SIM CAMERA
+- Subscribe to gazebo camera topic
+- CONVERT IMage to BGR (opencv readable)
+- Im.show(frames)
+
+
+TASK 6: Aruco tag detection
+
+- Use Sim camera frames to detect aruco markers
+- Draw aruco markers on fram
+- Publish to aruco detected frame with x,y,z distance to marker center to a ROS topic.
