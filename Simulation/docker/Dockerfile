@@ -2,6 +2,7 @@ FROM ubuntu:24.04
 
 # Suppress interactive apt prompts throughout build and in inner setup scripts
 ENV DEBIAN_FRONTEND=noninteractive
+ENV ROS_DISTRO=jazzy
 # Makes QGroundControl AppImage bypass FUSE (required in Docker without --privileged)
 ENV APPIMAGE_EXTRACT_AND_RUN=1
 
@@ -24,6 +25,18 @@ RUN curl -sSL https://packages.osrfoundation.org/gazebo.gpg \
         $(lsb_release -cs) main" \
         > /etc/apt/sources.list.d/gazebo-stable.list \
     && apt-get update && apt-get install -y --no-install-recommends gz-harmonic \
+    && rm -rf /var/lib/apt/lists/*
+
+# ── 2b. ROS 2 Jazzy ─────────────────────────────────────────────────────────────
+RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.asc \
+        | gpg --dearmor -o /usr/share/keyrings/ros-archive-keyring.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(lsb_release -cs) main" \
+        > /etc/apt/sources.list.d/ros2.list \
+    && apt-get update && apt-get install -y --no-install-recommends \
+    ros-jazzy-ros-core \
+    ros-jazzy-ros-gz-bridge \
+    python3-rosdep \
+    python3-colcon-common-extensions \
     && rm -rf /var/lib/apt/lists/*
 
 # ── 3. PX4 build toolchain ────────────────────────────────────────────────────
@@ -64,13 +77,16 @@ RUN wget -q -O /home/dev/QGroundControl.AppImage \
         https://github.com/mavlink/qgroundcontrol/releases/latest/download/QGroundControl-x86_64.AppImage \
     && chmod +x /home/dev/QGroundControl.AppImage
 
-# ── 8. Project Python deps (system-wide, reachable by dev) ────────────────────
-USER root
-COPY requirements.txt /tmp/requirements.txt
-RUN pip3 install --break-system-packages -r /tmp/requirements.txt \
-    && rm /tmp/requirements.txt
+# ── 8. Project Python deps via uv venv ────────────────────────────────────────
+COPY --chown=dev:dev pyproject.toml /tmp/pyproject.toml
+RUN uv venv /home/dev/.venv \
+    && uv pip install --python /home/dev/.venv/bin/python -r /tmp/pyproject.toml
 
-# ── 9. Entrypoint ─────────────────────────────────────────────────────────────
+# ── 9. ROS 2 shell setup ──────────────────────────────────────────────────────
+RUN echo "source /opt/ros/jazzy/setup.bash" >> /home/dev/.bashrc
+
+# ── 10. Entrypoint ────────────────────────────────────────────────────────────
+USER root
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN dos2unix /entrypoint.sh && chmod +x /entrypoint.sh
 

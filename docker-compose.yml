@@ -1,0 +1,40 @@
+services:
+
+  sim:
+    build:
+      context: Simulation
+      dockerfile: docker/Dockerfile
+    image: aero-sim:latest
+    env_file:
+      - Simulation/.env
+    volumes:
+      - .:/workspace
+      - /tmp/.X11-unix:/tmp/.X11-unix
+    environment:
+      - APPIMAGE_EXTRACT_AND_RUN=1
+      - GZ_SIM_RESOURCE_PATH=/workspace/Simulation/models
+    ports:
+      - "14540:14540/udp"    # MAVSDK
+      - "14550:14550/udp"    # QGroundControl
+    networks:
+      - aero
+    stdin_open: true
+    tty: true
+
+  ai:
+    build:
+      context: AI
+      dockerfile: docker/Dockerfile
+    image: aero-ai:latest
+    volumes:
+      - .:/workspace
+    networks:
+      - aero
+    stdin_open: true
+    tty: true
+    depends_on:
+      - sim
+
+networks:
+  aero:
+    driver: bridge

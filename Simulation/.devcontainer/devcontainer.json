@@ -1,8 +1,8 @@
 {
   "name": "Aero Simulation",
-  "dockerComposeFile": "../docker-compose.yml",
+  "dockerComposeFile": "../../docker-compose.yml",
   "service": "sim",
-  "workspaceFolder": "/workspace",
+  "workspaceFolder": "/workspace/Simulation",
   "remoteUser": "dev",
   "customizations": {
     "vscode": {

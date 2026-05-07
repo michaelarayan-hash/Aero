@@ -1,0 +1,20 @@
+{
+  "name": "Aero AI",
+  "dockerComposeFile": "../../docker-compose.yml",
+  "service": "ai",
+  "workspaceFolder": "/workspace/AI",
+  "remoteUser": "dev",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.pylance",
+        "ms-iot.vscode-ros"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/bin/python3",
+        "ros.distro": "jazzy"
+      }
+    }
+  }
+}
