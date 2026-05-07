@@ -11,6 +11,7 @@ Examples:
 """
 
 import argparse
+import json
 import os
 import select
 import signal
@@ -130,6 +131,9 @@ def main():
     parser.add_argument("--camera", action="store_true",
                         help="Open simulated camera feed with ArUco detection")
     args = parser.parse_args()
+    Path("/tmp/sim_state.json").write_text(
+        json.dumps({"world": args.world, "vehicle": args.vehicle})
+    )
 
     launch_sh = ROOT / "launch_sim.sh"
     if not launch_sh.exists():

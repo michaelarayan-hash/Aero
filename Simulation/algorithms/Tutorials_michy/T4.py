@@ -49,6 +49,7 @@ async def run():
         await _square_mission(drone)
     except Exception as e:
         print(f"Error occurred during square mission: {e}")
+        await drone.offboard.stop()
 
     print("-- Landing")
     await drone.action.return_to_launch()
@@ -56,7 +57,7 @@ async def run():
     async for is_armed in drone.telemetry.armed():
         if not is_armed:
             print("-- Landed and disarmed")
-            return
+            break
         
     task.cancel()
 
@@ -80,15 +81,15 @@ async def _square_mission(drone):
 
 
     moves = [
-    ("Go Forward",  VelocityBodyYawspeed(2.5, 0, 0, 90)),
-    ("Go Right",    VelocityBodyYawspeed(0, 2.5, 0, 90)) 
+    ("Go Forward",  (2.5, 0, 0, 90, 8)),
+    ("Go Right",    (0, 2.5, 0, 90, 5)) 
     ]
 
 
     for label, body in moves:
         print(f"-- {label}")
-        await drone.offboard.set_velocity_body(body)
-        await asyncio.sleep(10)
+        await drone.offboard.set_velocity_body(VelocityBodyYawspeed(body[0], body[1], body[2], body[3]))
+        await asyncio.sleep(body[4])
 
     print("-- Mission complete, stopping offboard")
     await drone.offboard.stop()
