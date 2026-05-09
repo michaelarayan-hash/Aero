@@ -111,5 +111,13 @@ fi
 # HEADLESS=1 tells PX4's make target to skip auto-launching `gz sim -g` — sim.py
 # is the single owner of the GUI (spawns it only when --gui is passed). Without
 # this PX4 would launch its own GUI and sim.py would launch a second one.
+
+# Strip venv from environment so PX4's cmake uses system Python, not the
+# workspace .venv that VS Code activates in the container shell.
+export PATH="$(echo "$PATH" | tr ':' '\n' | grep -v '\.venv' | tr '\n' ':' | sed 's/:$//')"
+export LD_LIBRARY_PATH="$(echo "${LD_LIBRARY_PATH:-}" | tr ':' '\n' | grep -v '/snap/' | tr '\n' ':' | sed 's/:$//')"
+export XDG_DATA_DIRS="/usr/share${XDG_DATA_DIRS:+:${XDG_DATA_DIRS}}"
+unset VIRTUAL_ENV PYTHONHOME PYTHONPATH
+
 cd "$PX4_ROOT"
 exec env HEADLESS=1 PX4_GZ_WORLD="$WORLD" PX4_GZ_WORLDS="$WORLDS_DIR" make px4_sitl "gz_${VEHICLE}"

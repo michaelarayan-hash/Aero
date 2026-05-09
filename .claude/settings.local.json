@@ -10,7 +10,8 @@
       "Bash(git *)",
       "Bash(docker image *)",
       "Bash(docker builder *)",
-      "Bash(docker system *)"
+      "Bash(docker system *)",
+      "Bash(docker exec aero-sim-1 *)"
     ]
   }
 }

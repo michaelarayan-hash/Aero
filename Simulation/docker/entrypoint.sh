@@ -20,8 +20,4 @@ if [[ -d "$PX4_MODELS" && -d /workspace/Simulation/models ]]; then
     done
 fi
 
-set +u
-source /opt/ros/jazzy/setup.bash
-set -u
-
 exec "$@"

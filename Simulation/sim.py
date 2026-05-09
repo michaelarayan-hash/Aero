@@ -169,6 +169,17 @@ def main():
     # Gazebo can resolve model:// URIs in custom world files without the user
     # having to set this env var manually before every launch.
     server_env = os.environ.copy()
+    server_env["PATH"] = ":".join(
+        p for p in server_env["PATH"].split(":")
+        if ".venv" not in p
+    )
+    server_env["LD_LIBRARY_PATH"] = ":".join(
+        p for p in server_env.get("LD_LIBRARY_PATH", "").split(":")
+        if "/snap/" not in p
+    )
+    server_env["XDG_DATA_DIRS"] = "/usr/share:" + server_env.get("XDG_DATA_DIRS", "/usr/share")
+    for _key in ("VIRTUAL_ENV", "PYTHONHOME", "PYTHONPATH"):
+        server_env.pop(_key, None)
     models_dir = str(ROOT / "models")
     existing_resource_path = server_env.get("GZ_SIM_RESOURCE_PATH", "")
     server_env["GZ_SIM_RESOURCE_PATH"] = (
@@ -184,12 +195,31 @@ def main():
     )
     procs.append(server)
 
-    if not wait_for_ready(server, timeout=90):
+    if not wait_for_ready(server, timeout=180):
         shutdown()
 
     print("[OK] Simulation is ready.\n")
 
-    # ── Step 3: launch QGroundControl ────────────────────────────────────────
+    # ── Step 3: launch ROS2 bridge ───────────────────────────────────────────
+    ros2_ws_setup = Path("/workspace/Simulation/ros2_ws/install/setup.bash")
+    if ros2_ws_setup.exists():
+        print(f"Starting ROS2 bridge (world={args.world} vehicle={args.vehicle})...")
+        bridge_proc = subprocess.Popen(
+            [
+                "/bin/bash", "-c",
+                f"source /opt/ros/jazzy/setup.bash && "
+                f"source {ros2_ws_setup} && "
+                f"ros2 launch sim_bringup sim.launch.py world:={args.world} vehicle:={args.vehicle}",
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+        procs.append(bridge_proc)
+    else:
+        print("[WARN] ros2_ws not built — skipping ROS2 bridge (run colcon build first).")
+
+    # ── Step 5: launch QGroundControl ────────────────────────────────────────
     qgc = config.QGC_APPIMAGE
     qgc_log = Path("/tmp/qgc.log")
     if qgc.exists():
@@ -201,7 +231,7 @@ def main():
     else:
         print(f"[WARN] QGroundControl not found at {qgc} — skipping.")
 
-    # ── Step 4: optionally launch Gazebo GUI ─────────────────────────────────
+    # ── Step 6: optionally launch Gazebo GUI ─────────────────────────────────
     if args.gui:
         time.sleep(2)  # let server finish initialising before GUI connects
         print("Starting Gazebo GUI (gz sim -g)...")
@@ -220,7 +250,7 @@ def main():
         else:
             print("[OK] Gazebo GUI running.")
 
-    # ── Step 5: optionally launch camera feed ────────────────────────────────
+    # ── Step 7: optionally launch camera feed ────────────────────────────────
     if args.camera:
         print("Starting camera feed (ArUco detection)...")
         cam_proc = subprocess.Popen(
@@ -230,7 +260,7 @@ def main():
         )
         procs.append(cam_proc)
 
-    # ── Step 6: keep alive, stream remaining server output ───────────────────
+    # ── Step 8: keep alive, stream remaining server output ───────────────────
     print(f"\nAll processes running.  Ctrl-C to stop everything.\n")
     print(f"  MAVSDK (offboard scripts) : udp://:{config.MAVSDK_PORT}")
     print(f"  QGroundControl            : UDP {config.QGC_PORT} (auto-detected)")

@@ -83,7 +83,13 @@ RUN uv venv /home/dev/.venv \
     && uv pip install --python /home/dev/.venv/bin/python -r /tmp/pyproject.toml
 
 # ── 9. ROS 2 shell setup ──────────────────────────────────────────────────────
-RUN echo "source /opt/ros/jazzy/setup.bash" >> /home/dev/.bashrc
+# Source ROS, then restore the OSRF gz binary and config path.
+# ROS vendors its own gz tools that shadow /usr/bin/gz and set GZ_CONFIG_PATH
+# to ROS-only paths — both changes make `gz sim` invisible. The two lines after
+# the source undo exactly that without breaking any ROS tooling.
+RUN echo "source /opt/ros/jazzy/setup.bash" >> /home/dev/.bashrc \
+    && echo "export PATH=\"/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:\$PATH\"" >> /home/dev/.bashrc \
+    && echo "export GZ_CONFIG_PATH=\"/usr/share/gz\${GZ_CONFIG_PATH:+:\$GZ_CONFIG_PATH}\"" >> /home/dev/.bashrc
 
 # ── 10. Entrypoint ────────────────────────────────────────────────────────────
 USER root
