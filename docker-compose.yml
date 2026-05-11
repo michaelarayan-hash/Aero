@@ -26,8 +26,11 @@ services:
       context: AI
       dockerfile: docker/Dockerfile
     image: aero-ai:latest
+    env_file:
+      - Simulation/.env
     volumes:
       - .:/workspace
+      - /tmp/.X11-unix:/tmp/.X11-unix
     networks:
       - aero
     stdin_open: true
