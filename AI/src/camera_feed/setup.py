@@ -15,6 +15,8 @@ setup(
     entry_points={
         'console_scripts': [
             'camera_node = camera_feed.camera_node:main',
+            'aruco_node = camera_feed.aruco_node:main',
+            'landing_node = camera_feed.landing_node:main',
         ],
     },
 )

@@ -131,7 +131,9 @@ def main():
     parser.add_argument("--camera", action="store_true",
                         help="Open simulated camera feed with ArUco detection")
     args = parser.parse_args()
-    Path("/tmp/sim_state.json").write_text(
+    sim_state_path = Path("/workspace/tmp/sim_state.json")
+    sim_state_path.parent.mkdir(parents=True, exist_ok=True)
+    sim_state_path.write_text(
         json.dumps({"world": args.world, "vehicle": args.vehicle})
     )
 
@@ -185,6 +187,9 @@ def main():
     server_env["GZ_SIM_RESOURCE_PATH"] = (
         f"{models_dir}:{existing_resource_path}" if existing_resource_path else models_dir
     )
+    worlds_dir = ROOT / "worlds"
+    if (worlds_dir / f"{args.world}.sdf").exists():
+        server_env["PX4_GZ_WORLDS"] = str(worlds_dir)
     server = subprocess.Popen(
         ["bash", str(launch_sh), args.world, args.vehicle],
         stdout=subprocess.PIPE,

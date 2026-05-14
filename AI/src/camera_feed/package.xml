@@ -3,12 +3,13 @@
   <name>camera_feed</name>
   <version>0.1.0</version>
   <description>ROS2 camera subscriber for Aero simulation</description>
-  <maintainer email="dev@aero.local">dev</maintainer>
+  <maintainer email="m.rayan@aeroteameindhoven.com">dev</maintainer>
   <license>MIT</license>
 
   <exec_depend>rclpy</exec_depend>
   <exec_depend>sensor_msgs</exec_depend>
   <exec_depend>cv_bridge</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
 
   <export>
     <build_type>ament_python</build_type>

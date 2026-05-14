@@ -69,10 +69,10 @@ source install/setup.bash
 ros2 run camera_feed camera_node
 ```
 
-The node subscribes to the default topic and logs a heartbeat every 30 frames:
+The node reads `/workspace/tmp/sim_state.json` (written by `sim.py` on startup) to automatically pick up the correct `world` and `vehicle` — no manual parameters needed. It logs a heartbeat every 30 frames:
 
 ```
-[INFO] [camera_feed]: Subscribing to: /world/default/model/x500_mono_cam_down_0/link/camera_link/sensor/camera/image
+[INFO] [camera_feed]: Subscribing to: /world/aruco/model/x500_mono_cam_down_0/link/camera_link/sensor/camera/image
 [INFO] [camera_feed]: Frame 1: 1280x960
 [INFO] [camera_feed]: Frame 31: 1280x960
 ```
@@ -85,7 +85,9 @@ ros2 run camera_feed camera_node --ros-args -p display:=true
 
 Opens a 960×720 OpenCV window titled **Aero Camera**. Press `q` to close and shut down the node.
 
-### Custom world or vehicle
+### Override world or vehicle
+
+Explicit parameters always take precedence over `sim_state.json`:
 
 ```bash
 ros2 run camera_feed camera_node --ros-args \
@@ -100,12 +102,26 @@ The node builds the topic string as:
 
 ---
 
+## Automatic parameter discovery
+
+When `sim.py` starts it writes:
+
+```
+/workspace/tmp/sim_state.json  →  {"world": "aruco", "vehicle": "x500_mono_cam_down"}
+```
+
+`camera_node` reads this file before declaring its ROS2 parameters so the defaults match whatever the sim is running. The `/workspace` volume is shared between both containers, so the file written by the sim container is immediately visible in the AI container.
+
+If the file is missing (sim not started yet), the node falls back to `world=aruco` / `vehicle=x500_mono_cam_down`.
+
+---
+
 ## Parameters
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
-| `world` | string | `default` | Gazebo world name — must match the world loaded in the sim container |
-| `vehicle` | string | `x500_mono_cam_down` | Model name — the node appends `_0` (first spawned instance) |
+| `world` | string | from `sim_state.json` | Gazebo world name — must match the world loaded in the sim container |
+| `vehicle` | string | from `sim_state.json` | Model name — the node appends `_0` (first spawned instance) |
 | `display` | bool | `false` | Show a live OpenCV window |
 
 Pass any parameter with `--ros-args -p name:=value`.
