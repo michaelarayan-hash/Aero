@@ -12,18 +12,20 @@ from mavsdk.action import ActionError
 from mavsdk.offboard import OffboardError, PositionNedYaw, VelocityBodyYawspeed
 
 # ── Constants ─────────────────────────────────────────────────────────────────
-MAVSDK_ADDRESS    = "udpin://sim:14540"  # resolved at runtime via socket.getaddrinfo
-TAKEOFF_ALT_M     = 2.0
-DETECT_HZ         = 10
-DESCENT_SPEED_MS  = 0.3
-KP_XY             = 0.5
-MAX_XY_VEL_MS     = 1.0
-XY_ALIGN_THRESH_M = 0.15
-LAND_ALT_M        = 0.4
-POSE_TIMEOUT_SEC  = 1.0
-GPS_TIMEOUT_SEC   = 60
-IN_AIR_TIMEOUT    = 30
-LAND_TIMEOUT      = 60
+MAVSDK_ADDRESS     = f"udpin://0.0.0.0:{14540}"
+MAVSDK_SERVER_HOST = "sim"   # sim container hostname on the aero Docker network
+MAVSDK_SERVER_PORT = 50051
+TAKEOFF_ALT_M      = 3.0
+DETECT_HZ          = 10
+DESCENT_SPEED_MS   = 0.3
+KP_XY              = 0.5
+MAX_XY_VEL_MS      = 1.0
+XY_ALIGN_THRESH_M  = 0.15
+LAND_ALT_M         = 0.4
+POSE_TIMEOUT_SEC   = 1.0
+GPS_TIMEOUT_SEC    = 30
+IN_AIR_TIMEOUT     = 30
+LAND_TIMEOUT       = 60
 
 
 # ── State machine ─────────────────────────────────────────────────────────────
@@ -55,25 +57,32 @@ async def _get_altitude(drone) -> float:
         return pos.relative_altitude_m
 
 
+async def _wait_for_altitude(drone, target_m: float, timeout: float, logger) -> None:
+    async def _watch():
+        async for pos in drone.telemetry.position():
+            if pos.relative_altitude_m >= target_m:
+                logger.info(f"Reached {pos.relative_altitude_m:.1f} m AGL.")
+                return
+    try:
+        await asyncio.wait_for(_watch(), timeout=timeout)
+    except asyncio.TimeoutError:
+        raise TimeoutError(f"Timed out waiting to reach {target_m:.1f} m after {timeout}s")
+
+
 # ── Flight coroutine ──────────────────────────────────────────────────────────
 async def run_landing(
     altitude_m: float,
+    server_host: str,
     shutdown_event: threading.Event,
     shared: dict,
     lock: threading.Lock,
     logger,
 ) -> None:
-    period = 1.0 / DETECT_HZ
+        period = 1.0 / DETECT_HZ
+        drone = System(mavsdk_server_address=server_host, port=MAVSDK_SERVER_PORT)
+        await drone.connect(system_address=MAVSDK_ADDRESS)
 
-    try:
-        import socket
-        sim_ip = socket.gethostbyname('sim')
-        address = f"udpout://{sim_ip}:14540"
-
-        drone = System()
-        await drone.connect(system_address=address)
-
-        logger.info(f"Connecting to PX4 at {address}...")
+        logger.info(f"Connecting to PX4 via mavsdk_server at {server_host}:{MAVSDK_SERVER_PORT}...")
         async for state in drone.core.connection_state():
             if state.is_connected:
                 logger.info("Connected.")
@@ -91,13 +100,21 @@ async def run_landing(
         logger.info(f"Arming and taking off to {altitude_m} m...")
         await drone.action.set_takeoff_altitude(altitude_m)
         await drone.action.arm()
+        async for armed_state in drone.telemetry.armed():
+            if armed_state:
+                logger.info("Armed confirmed. Waiting before takeoff...")
+                break
+        await asyncio.sleep(3)
         await drone.action.takeoff()
         await _wait_in_air(drone, True, IN_AIR_TIMEOUT, "airborne")
-        logger.info("Airborne. Entering offboard mode.")
+        logger.info("Climbing to target altitude...")
+        await _wait_for_altitude(drone, altitude_m * 0.8, IN_AIR_TIMEOUT, logger)
+        logger.info("Entering offboard mode.")
 
-        seed = PositionNedYaw(0.0, 2.0, -altitude_m, 0.0)
+        seed = PositionNedYaw(1.0, 1.0, -altitude_m, 0.0)
         await drone.offboard.set_position_ned(seed)
         await drone.offboard.start()
+        await asyncio.sleep(5)
         logger.info("Offboard active. Starting control loop.")
 
         lstate = LandState.SEARCH
@@ -174,11 +191,6 @@ async def run_landing(
             pass
         logger.info("Landed and disarmed.")
 
-    except Exception as e:
-        logger.error(f"Landing error: {e}")
-    finally:
-        shutdown_event.set()
-
 
 # ── ROS2 node ─────────────────────────────────────────────────────────────────
 class LandingNode(Node):
@@ -186,13 +198,19 @@ class LandingNode(Node):
         super().__init__('landing_node')
 
         self.declare_parameter('altitude', TAKEOFF_ALT_M)
-        self._altitude = self.get_parameter('altitude').get_parameter_value().double_value
+        self.declare_parameter('mavsdk_server_host', MAVSDK_SERVER_HOST)
+
+        self._altitude    = self.get_parameter('altitude').get_parameter_value().double_value
+        self._server_host = self.get_parameter('mavsdk_server_host').get_parameter_value().string_value
 
         self._shared = shared
         self._lock   = lock
 
         self.create_subscription(PoseStamped, '/aruco/pose', self._on_pose, 10)
-        self.get_logger().info(f"Subscribed to /aruco/pose. Takeoff altitude: {self._altitude} m")
+        self.get_logger().info(
+            f"Subscribed to /aruco/pose. Takeoff altitude: {self._altitude} m  "
+            f"mavsdk_server: {self._server_host}:{MAVSDK_SERVER_PORT}"
+        )
 
     def _on_pose(self, msg: PoseStamped):
         with self._lock:
@@ -216,24 +234,21 @@ def main(args=None):
 
     node = LandingNode(shared, lock)
 
-    landing_thread = threading.Thread(
-        target=lambda: asyncio.run(
-            run_landing(node._altitude, shutdown_event, shared, lock, node.get_logger())
-        ),
-        daemon=True,
-        name="landing",
-    )
-    landing_thread.start()
+    ros_thread = threading.Thread(target=rclpy.spin, args=(node,), daemon=True, name="ros_spin")
+    ros_thread.start()
 
     try:
-        rclpy.spin(node)
+        asyncio.run(run_landing(
+            node._altitude, node._server_host,
+            shutdown_event, shared, lock, node.get_logger()
+        ))
     except KeyboardInterrupt:
         pass
     finally:
         shutdown_event.set()
-        landing_thread.join(timeout=30)
         node.destroy_node()
         rclpy.try_shutdown()
+        ros_thread.join(timeout=5)
 
 
 if __name__ == '__main__':

@@ -74,7 +74,7 @@ async def _wait_for_altitude(logger: DroneLogger, target_altitude: float, thresh
 async def _square_mission(drone):
     print("-- Setting initial setpoint")
     await drone.offboard.set_velocity_ned(VelocityNedYaw(0, 0, 0, 0))  # hover in place
-    await asyncio.sleep(1)  # small delay to ensure setpoint is processed
+    await asyncio.sleep(2)  # small delay to ensure setpoint is processed
     print("-- Starting square mission")
     await drone.offboard.start()
 

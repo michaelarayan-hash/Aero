@@ -140,7 +140,7 @@ class ArucoNode(Node):
         pose_msg.pose.position.z = float(best_tvec[2])
         self._pub.publish(pose_msg)
 
-        self.get_logger().info(
+        self.get_logger().debug(
             f'ID{best_id}  x={best_tvec[0]:.1f}  y={best_tvec[1]:.1f}  z={best_tvec[2]:.1f} mm'
         )
 
