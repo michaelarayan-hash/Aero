@@ -60,10 +60,16 @@ USER dev
 WORKDIR /home/dev
 ENV PATH="/home/dev/.local/bin:${PATH}"
 
-# ── 5. uv ─────────────────────────────────────────────────────────────────────
+# ── 5. Node.js + Claude Code ──────────────────────────────────────────────────
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash - \
+    && sudo apt-get install -y --no-install-recommends nodejs \
+    && sudo npm install -g @anthropic-ai/claude-code \
+    && sudo rm -rf /var/lib/apt/lists/*
+
+# ── 6. uv ─────────────────────────────────────────────────────────────────────
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# ── 6. PX4 source + runtime deps + SITL build ─────────────────────────────────
+# ── 7. PX4 source + runtime deps + SITL build ─────────────────────────────────
 # Pin PX4 by overriding PX4_REF at build time:
 #   docker compose build --build-arg PX4_REF=v1.15.2
 ARG PX4_REF=main
@@ -72,17 +78,17 @@ RUN git clone --depth 1 --branch ${PX4_REF} --recurse-submodules --shallow-submo
     && bash /home/dev/PX4-Autopilot/Tools/setup/ubuntu.sh --no-nuttx \
     && cd /home/dev/PX4-Autopilot && make px4_sitl_default
 
-# ── 7. QGroundControl ─────────────────────────────────────────────────────────
+# ── 8. QGroundControl ─────────────────────────────────────────────────────────
 RUN wget -q -O /home/dev/QGroundControl.AppImage \
         https://github.com/mavlink/qgroundcontrol/releases/latest/download/QGroundControl-x86_64.AppImage \
     && chmod +x /home/dev/QGroundControl.AppImage
 
-# ── 8. Project Python deps via uv venv ────────────────────────────────────────
+# ── 9. Project Python deps via uv venv ────────────────────────────────────────
 COPY --chown=dev:dev pyproject.toml /tmp/pyproject.toml
 RUN uv venv /home/dev/.venv \
     && uv pip install --python /home/dev/.venv/bin/python -r /tmp/pyproject.toml
 
-# ── 9. ROS 2 shell setup ──────────────────────────────────────────────────────
+# ── 10. ROS 2 shell setup ─────────────────────────────────────────────────────
 # Source ROS, then restore the OSRF gz binary and config path.
 # ROS vendors its own gz tools that shadow /usr/bin/gz and set GZ_CONFIG_PATH
 # to ROS-only paths — both changes make `gz sim` invisible. The two lines after
@@ -91,7 +97,7 @@ RUN echo "source /opt/ros/jazzy/setup.bash" >> /home/dev/.bashrc \
     && echo "export PATH=\"/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:\$PATH\"" >> /home/dev/.bashrc \
     && echo "export GZ_CONFIG_PATH=\"/usr/share/gz\${GZ_CONFIG_PATH:+:\$GZ_CONFIG_PATH}\"" >> /home/dev/.bashrc
 
-# ── 10. Entrypoint ────────────────────────────────────────────────────────────
+# ── 11. Entrypoint ────────────────────────────────────────────────────────────
 USER root
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN dos2unix /entrypoint.sh && chmod +x /entrypoint.sh

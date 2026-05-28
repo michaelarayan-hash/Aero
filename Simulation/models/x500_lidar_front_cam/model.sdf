@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sdf version='1.9'>
+  <model name='x500_lidar_front_cam'>
+    <include merge='true'>
+      <uri>x500</uri>
+    </include>
+
+    <!-- Forward-facing cone lidar: 16x16 beams, ±30° H and V, 100 m range -->
+    <link name="lidar_sensor_link">
+      <pose relative_to="base_link">.15 0 .10 0 0 0</pose>
+      <inertial>
+        <mass>0.001</mass>
+        <inertia>
+          <ixx>0.00001</ixx>
+          <iyy>0.00001</iyy>
+          <izz>0.00001</izz>
+          <ixy>0.0</ixy>
+          <ixz>0.0</ixz>
+          <iyz>0.0</iyz>
+        </inertia>
+      </inertial>
+      <sensor name='lidar' type='gpu_lidar'>
+        <gz_frame_id>lidar_sensor_link</gz_frame_id>
+        <pose relative_to="base_link">.15 0 .10 0 0 0</pose>
+        <update_rate>10</update_rate>
+        <ray>
+          <scan>
+            <horizontal>
+              <samples>8</samples>
+              <resolution>1</resolution>
+              <min_angle>-0.52</min_angle>
+              <max_angle>0.52</max_angle>
+            </horizontal>
+            <vertical>
+              <samples>8</samples>
+              <resolution>1</resolution>
+              <min_angle>-0.52</min_angle>
+              <max_angle>0.52</max_angle>
+            </vertical>
+          </scan>
+          <range>
+            <min>0.1</min>
+            <max>3.0</max>
+            <resolution>0.1</resolution>
+          </range>
+        </ray>
+        <always_on>1</always_on>
+        <visualize>true</visualize>
+      </sensor>
+    </link>
+    <joint name="lidar_sensor_joint" type="fixed">
+      <parent>base_link</parent>
+      <child>lidar_sensor_link</child>
+    </joint>
+
+    <!-- Downward-facing cone lidar: 16x16 beams, ±30° H and V, 50 m range -->
+    <link name="lidar_down_sensor_link">
+      <pose relative_to="base_link">0 0 0 0 1.5707 0</pose>
+      <inertial>
+        <mass>0.001</mass>
+        <inertia>
+          <ixx>0.00001</ixx>
+          <iyy>0.00001</iyy>
+          <izz>0.00001</izz>
+          <ixy>0.0</ixy>
+          <ixz>0.0</ixz>
+          <iyz>0.0</iyz>
+        </inertia>
+      </inertial>
+      <sensor name='lidar_down' type='gpu_lidar'>
+        <gz_frame_id>lidar_down_sensor_link</gz_frame_id>
+        <pose relative_to="base_link">0 0 0 0 1.5707 0</pose>
+        <update_rate>10</update_rate>
+        <ray>
+          <scan>
+            <horizontal>
+              <samples>8</samples>
+              <resolution>1</resolution>
+              <min_angle>-0.52</min_angle>
+              <max_angle>0.52</max_angle>
+            </horizontal>
+            <vertical>
+              <samples>8</samples>
+              <resolution>1</resolution>
+              <min_angle>-0.52</min_angle>
+              <max_angle>0.52</max_angle>
+            </vertical>
+          </scan>
+          <range>
+            <min>0.1</min>
+            <max>3.0</max>
+            <resolution>0.1</resolution>
+          </range>
+        </ray>
+        <always_on>1</always_on>
+        <visualize>true</visualize>
+      </sensor>
+    </link>
+    <joint name="lidar_down_sensor_joint" type="fixed">
+      <parent>base_link</parent>
+      <child>lidar_down_sensor_link</child>
+    </joint>
+
+    <!-- Downward-facing mono camera -->
+    <include merge='true'>
+      <uri>model://mono_cam</uri>
+      <pose>0 0 .10 0 1.5707 0</pose>
+      <name>mono_cam</name>
+    </include>
+    <joint name="CameraJoint" type="fixed">
+      <parent>base_link</parent>
+      <child>camera_link</child>
+      <pose relative_to="base_link">0 0 0 0 1.5707 0</pose>
+    </joint>
+
+  </model>
+</sdf>

@@ -2,12 +2,13 @@
 Simulation launcher — kills stray processes, then starts PX4 server, QGC, and optionally Gazebo GUI.
 
 Usage:
-    python3 sim.py [--world WORLD] [--vehicle VEHICLE] [--gui]
+    python3 sim.py [--world WORLD] [--vehicle VEHICLE] [--gui] [--gqc]
 
 Examples:
     python3 sim.py --world forest --gui
     python3 sim.py --world aruco --vehicle x500_depth --gui
-    python3 sim.py --world baylands          # server + QGC only, no GUI
+    python3 sim.py --world baylands          # server only, no GUI or QGC
+    python3 sim.py --world baylands --gqc    # server + QGC, no GUI
 """
 
 import argparse
@@ -130,6 +131,8 @@ def main():
                         help="Open Gazebo GUI (gz sim -g)")
     parser.add_argument("--camera", action="store_true",
                         help="Open simulated camera feed with ArUco detection")
+    parser.add_argument("--gqc", action="store_true",
+                        help="Launch QGroundControl (AppImage) when set")
     args = parser.parse_args()
     sim_state_path = Path("/workspace/tmp/sim_state.json")
     sim_state_path.parent.mkdir(parents=True, exist_ok=True)
@@ -224,17 +227,20 @@ def main():
     else:
         print("[WARN] ros2_ws not built — skipping ROS2 bridge (run colcon build first).")
 
-    # ── Step 5: launch QGroundControl ────────────────────────────────────────
-    qgc = config.QGC_APPIMAGE
-    qgc_log = Path("/tmp/qgc.log")
-    if qgc.exists():
-        print(f"Starting QGroundControl ({qgc})... (stderr → {qgc_log})")
-        qgc_log_fh = open(qgc_log, "w")
-        procs.append(subprocess.Popen(
-            [str(qgc)], stdout=qgc_log_fh, stderr=subprocess.STDOUT
-        ))
+    # ── Step 5: launch QGroundControl (only if requested) ────────────────────
+    if args.gqc:
+        qgc = config.QGC_APPIMAGE
+        qgc_log = Path("/tmp/qgc.log")
+        if qgc.exists():
+            print(f"Starting QGroundControl ({qgc})... (stderr → {qgc_log})")
+            qgc_log_fh = open(qgc_log, "w")
+            procs.append(subprocess.Popen(
+                [str(qgc)], stdout=qgc_log_fh, stderr=subprocess.STDOUT
+            ))
+        else:
+            print(f"[WARN] QGroundControl not found at {qgc} — skipping.")
     else:
-        print(f"[WARN] QGroundControl not found at {qgc} — skipping.")
+        print("[INFO] --gqc not set; skipping QGroundControl.")
 
     # ── Step 6: optionally launch Gazebo GUI ─────────────────────────────────
     if args.gui:

@@ -107,6 +107,27 @@ if [[ "$WORLDS_DIR" != "$DEFAULT_WORLDS_DIR" ]]; then
     fi
 fi
 
+# ── Inject workspace airframes into PX4's ROMFS ──────────────────────────────
+# Custom airframes are stored in /workspace/Simulation/airframes/ so they
+# survive container rebuilds. We copy them into PX4's directory and register
+# them in CMakeLists.txt before make runs (cmake re-reads it each invocation).
+WORKSPACE_AIRFRAMES_DIR="$SCRIPT_DIR/airframes"
+PX4_AIRFRAMES_DIR="$PX4_ROOT/ROMFS/px4fmu_common/init.d-posix/airframes"
+PX4_AIRFRAMES_CMAKE="$PX4_AIRFRAMES_DIR/CMakeLists.txt"
+
+if [[ -d "$WORKSPACE_AIRFRAMES_DIR" ]]; then
+    for af in "$WORKSPACE_AIRFRAMES_DIR"/*; do
+        [[ -f "$af" ]] || continue
+        af_name="$(basename "$af")"
+        cp "$af" "$PX4_AIRFRAMES_DIR/$af_name"
+        chmod +x "$PX4_AIRFRAMES_DIR/$af_name"
+        if ! grep -q "$af_name" "$PX4_AIRFRAMES_CMAKE"; then
+            sed -i "s/\t4021_gz_x500_flow/\t4021_gz_x500_flow\n\t$af_name/" "$PX4_AIRFRAMES_CMAKE"
+            echo "  Registered airframe: $af_name"
+        fi
+    done
+fi
+
 # ── Launch (exec = clean Ctrl-C forwarding) ───────────────────────────────────
 # HEADLESS=1 tells PX4's make target to skip auto-launching `gz sim -g` — sim.py
 # is the single owner of the GUI (spawns it only when --gui is passed). Without

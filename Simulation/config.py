@@ -11,8 +11,8 @@ QGC_APPIMAGE = Path("~/QGroundControl.AppImage").expanduser()
 WORLDS_DIR = PX4_ROOT / "Tools/simulation/gz/worlds"
 
 # ── Vehicle ───────────────────────────────────────────────────────────────────
-# Camera variants: x500_mono_cam, x500_mono_cam_down, x500_depth
-VEHICLE = "x500_mono_cam_down"
+# Camera variants: x500_mono_cam, x500_mono_cam_down, x500_depth, x500_lidar_front_cam
+VEHICLE = "x500_lidar_front_cam"
 MAKE_TARGET = f"gz_{VEHICLE}"
 
 # ── World (overridable via env var) ───────────────────────────────────────────
