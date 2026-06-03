@@ -88,11 +88,10 @@ if [[ "$WORLDS_DIR" != "$DEFAULT_WORLDS_DIR" ]]; then
     PX4_GZ_MODELS_DEFAULT="$PX4_ROOT/Tools/simulation/gz/models"
     SIBLING_MODELS_DIR="$(dirname "$WORLDS_DIR")/models"
 
-    # Symlink the world SDF if not already there
-    if [[ ! -e "$PX4_GZ_WORLDS_DEFAULT/$WORLD.sdf" ]]; then
-        ln -sf "$WORLD_SDF" "$PX4_GZ_WORLDS_DEFAULT/$WORLD.sdf"
-        echo "  Linked world: $WORLD.sdf → $PX4_GZ_WORLDS_DEFAULT/"
-    fi
+    # Always re-symlink so randomized worlds (written to /tmp/px4_worlds/ each run)
+    # take effect instead of reusing a stale link from a previous run.
+    ln -sf "$WORLD_SDF" "$PX4_GZ_WORLDS_DEFAULT/$WORLD.sdf"
+    echo "  Linked world: $WORLD.sdf → $PX4_GZ_WORLDS_DEFAULT/"
 
     # Symlink any models in the sibling models/ directory
     if [[ -d "$SIBLING_MODELS_DIR" && -d "$PX4_GZ_MODELS_DEFAULT" ]]; then

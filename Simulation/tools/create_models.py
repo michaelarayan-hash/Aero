@@ -53,6 +53,8 @@ MARKERS = [
     ("aruco_4x4_id0",        "ArUco 4x4_50 marker ID 0"),
     ("aruco_4x4_id1",        "ArUco 4x4_50 marker ID 1"),
     ("aruco_4x4_id2",        "ArUco 4x4_50 marker ID 2"),
+    ("aruco_5x5_id0",        "ArUco 5x5_50 marker ID 0"),
+    ("aruco_5x5_id1",        "ArUco 5x5_50 marker ID 1"),
     ("apriltag_36h11_id0",   "AprilTag 36h11 marker ID 0"),
     ("apriltag_36h11_id1",   "AprilTag 36h11 marker ID 1"),
     ("apriltag_36h11_id2",   "AprilTag 36h11 marker ID 2"),

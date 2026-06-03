@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """
-Generate PNG marker images for the tag_demo Gazebo world.
+Generate PNG marker images for Gazebo worlds.
 
 Outputs:
   Simulation/models/aruco_4x4_id{0,1,2}/marker.png
+  Simulation/models/aruco_5x5_id{0,1}/marker.png
   Simulation/models/apriltag_36h11_id{0,1,2}/marker.png
 
 Run from Simulation/:
@@ -25,13 +26,19 @@ def write_marker(img_gray: np.ndarray, out_path: Path) -> None:
 
 
 def main() -> None:
-    aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
+    dict_4x4  = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
+    dict_5x5  = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_5X5_50)
     april_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_APRILTAG_36h11)
 
     print("ArUco 4x4_50:")
     for mid in range(3):
-        img = cv2.aruco.generateImageMarker(aruco_dict, mid, SIZE_PX)
+        img = cv2.aruco.generateImageMarker(dict_4x4, mid, SIZE_PX)
         write_marker(img, MODELS_DIR / f"aruco_4x4_id{mid}" / "marker.png")
+
+    print("ArUco 5x5_50:")
+    for mid in range(2):
+        img = cv2.aruco.generateImageMarker(dict_5x5, mid, SIZE_PX)
+        write_marker(img, MODELS_DIR / f"aruco_5x5_id{mid}" / "marker.png")
 
     print("AprilTag 36h11:")
     for mid in range(3):
