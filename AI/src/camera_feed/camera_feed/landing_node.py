@@ -17,7 +17,7 @@ MAVSDK_SERVER_PORT  = 50051
 CONNECT_TIMEOUT_SEC = 30     # seconds to wait for mavsdk_server gRPC + PX4 MAVLink
 TAKEOFF_ALT_M       = 5.0
 DETECT_HZ          = 10
-DESCENT_SPEED_MS   = 0.5
+DESCENT_SPEED_MS   = 1.0
 KP_XY              = 0.5
 MAX_XY_VEL_MS      = 1.0
 XY_ALIGN_THRESH_M  = 0.2
@@ -42,14 +42,17 @@ def _clamp(value: float, low: float, high: float) -> float:
 
 
 async def _wait_in_air(drone, state: bool, timeout: float, label: str) -> None:
+    stream = drone.telemetry.in_air()
     async def _watch():
-        async for in_air in drone.telemetry.in_air():
+        async for in_air in stream:
             if in_air == state:
                 return
     try:
         await asyncio.wait_for(_watch(), timeout=timeout)
     except asyncio.TimeoutError:
         raise TimeoutError(f"Timed out waiting for {label} after {timeout}s")
+    finally:
+        await stream.aclose()
 
 
 async def _get_altitude(drone) -> float:
@@ -58,8 +61,9 @@ async def _get_altitude(drone) -> float:
 
 
 async def _wait_for_altitude(drone, target_m: float, timeout: float, logger) -> None:
+    stream = drone.telemetry.position()
     async def _watch():
-        async for pos in drone.telemetry.position():
+        async for pos in stream:
             if pos.relative_altitude_m >= target_m:
                 logger.info(f"Reached {pos.relative_altitude_m:.1f} m AGL.")
                 return
@@ -67,6 +71,8 @@ async def _wait_for_altitude(drone, target_m: float, timeout: float, logger) -> 
         await asyncio.wait_for(_watch(), timeout=timeout)
     except asyncio.TimeoutError:
         raise TimeoutError(f"Timed out waiting to reach {target_m:.1f} m after {timeout}s")
+    finally:
+        await stream.aclose()
 
 
 # ── Flight coroutine ──────────────────────────────────────────────────────────
@@ -122,10 +128,20 @@ async def run_landing(
         await _wait_in_air(drone, True, IN_AIR_TIMEOUT, "airborne")
         logger.info("Climbing to target altitude...")
         await _wait_for_altitude(drone, altitude_m * 0.9, IN_AIR_TIMEOUT, logger)
-        await asyncio.sleep(0.5)  # let abandoned telemetry stream close before offboard entry
+
+        attitude_stream = drone.telemetry.attitude_euler()
+        async def _read_yaw():
+            async for att in attitude_stream:
+                return att.yaw_deg
+        try:
+            current_yaw = await _read_yaw()
+        finally:
+            await attitude_stream.aclose()
+
+        await asyncio.sleep(2.0)
         logger.info("Entering offboard mode.")
-            
-        init_setpoint = PositionNedYaw(init_north_m, init_east_m, -altitude_m, 0.0)
+
+        init_setpoint = PositionNedYaw(init_north_m, init_east_m, -altitude_m, current_yaw)
         await drone.offboard.set_position_ned(init_setpoint)
         await drone.offboard.start()
         await asyncio.sleep(8)
