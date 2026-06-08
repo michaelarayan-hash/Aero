@@ -6,7 +6,8 @@ dependencies = [
     "torch",
     "torchvision",
     "onnxruntime",
-    "numpy",
+    "numpy<2",
+    "mavsdk>=2.0.0",
 ]
 
 [dependency-groups]
