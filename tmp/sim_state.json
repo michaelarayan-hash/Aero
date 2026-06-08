@@ -1,1 +1,5 @@
+<<<<<<< HEAD
 {"world": "random_aruco", "vehicle": "x500_mono_cam_down", "seed": 783683327}
+=======
+{"world": "random_aruco", "vehicle": "x500_mono_cam_down", "seed": 583343324}
+>>>>>>> refs/remotes/origin/demo_day
