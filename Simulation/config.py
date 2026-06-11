@@ -19,9 +19,10 @@ MAKE_TARGET = f"gz_{VEHICLE}"
 WORLD = os.environ.get("PX4_GZ_WORLD", "default")
 
 # ── MAVLink ports ─────────────────────────────────────────────────────────────
-MAVSDK_PORT = 14540       # offboard / algorithm scripts
-QGC_PORT = 14550          # QGroundControl broadcast
+MAVSDK_PORT = 14540             # MAVLink UDP port PX4 listens on
+QGC_PORT = 14550                # QGroundControl broadcast
 MAVSDK_ADDRESS = f"udpin://0.0.0.0:{MAVSDK_PORT}"
+MAVSDK_SERVER_PORT = 50051      # gRPC port mavsdk_server exposes to clients
 
 # ── Timeouts ──────────────────────────────────────────────────────────────────
 CONNECT_TIMEOUT_SEC = 30

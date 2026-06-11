@@ -14,6 +14,7 @@ Examples:
 import argparse
 import json
 import os
+import random
 import select
 import signal
 import subprocess
@@ -30,6 +31,7 @@ STRAY_PATTERNS = [
     "gz sim",
     "ruby.*gz",
     "px4",
+    "mavsdk_server",
     "QGroundControl",
 ]
 
@@ -131,9 +133,14 @@ def main():
                         help="Open Gazebo GUI (gz sim -g)")
     parser.add_argument("--camera", action="store_true",
                         help="Open simulated camera feed with ArUco detection")
+    parser.add_argument("--seed", type=int, default=None,
+                        help="RNG seed for world randomization (random if omitted)")
+    parser.add_argument("--no-randomize", action="store_true",
+                        help="Use the static .sdf world file without randomization")
     parser.add_argument("--gqc", action="store_true",
                         help="Launch QGroundControl (AppImage) when set")
     args = parser.parse_args()
+    world_seed = args.seed if args.seed is not None else random.randint(0, 2**31 - 1)
     sim_state_path = Path("/workspace/tmp/sim_state.json")
     sim_state_path.parent.mkdir(parents=True, exist_ok=True)
     sim_state_path.write_text(
@@ -193,6 +200,21 @@ def main():
     worlds_dir = ROOT / "worlds"
     if (worlds_dir / f"{args.world}.sdf").exists():
         server_env["PX4_GZ_WORLDS"] = str(worlds_dir)
+
+    # Randomize world layout if a generator exists for this world name
+    if not args.no_randomize:
+        import world_gen
+        sdf = world_gen.generate(args.world, world_seed)
+        if sdf is not None:
+            tmp_worlds = Path("/tmp/px4_worlds")
+            tmp_worlds.mkdir(parents=True, exist_ok=True)
+            (tmp_worlds / f"{args.world}.sdf").write_text(sdf)
+            server_env["PX4_GZ_WORLDS"] = str(tmp_worlds)
+            sim_state_path.write_text(
+                json.dumps({"world": args.world, "vehicle": args.vehicle, "seed": world_seed})
+            )
+            print(f"  World randomized  seed={world_seed}  (rerun with --seed {world_seed} to reproduce)")
+
     server = subprocess.Popen(
         ["bash", str(launch_sh), args.world, args.vehicle],
         stdout=subprocess.PIPE,
@@ -208,7 +230,30 @@ def main():
 
     print("[OK] Simulation is ready.\n")
 
-    # ── Step 3: launch ROS2 bridge ───────────────────────────────────────────
+    # ── Step 3: launch mavsdk_server ─────────────────────────────────────────
+    try:
+        import mavsdk as _mavsdk
+        _mavsdk_bin = Path(_mavsdk.__file__).parent / "bin" / "mavsdk_server"
+        if _mavsdk_bin.exists():
+            print(f"Starting mavsdk_server (gRPC :{config.MAVSDK_SERVER_PORT} ← MAVLink :{config.MAVSDK_PORT})...")
+            _mavsdk_log = Path("/tmp/mavsdk_server.log")
+            mavsdk_proc = subprocess.Popen(
+                [str(_mavsdk_bin), "-p", str(config.MAVSDK_SERVER_PORT), config.MAVSDK_ADDRESS],
+                stdout=open(_mavsdk_log, "w"),
+                stderr=subprocess.STDOUT,
+            )
+            print(f"  (mavsdk_server log → {_mavsdk_log})")
+            procs.append(mavsdk_proc)
+            if mavsdk_proc.poll() is not None:
+                print("[WARN] mavsdk_server exited immediately — check port availability.")
+            else:
+                print(f"[OK] mavsdk_server running (gRPC :{config.MAVSDK_SERVER_PORT}).")
+        else:
+            print(f"[WARN] mavsdk_server binary not found at {_mavsdk_bin} — skipping.")
+    except ImportError:
+        print("[WARN] mavsdk not installed — skipping mavsdk_server.")
+
+    # ── Step 4: launch ROS2 bridge ───────────────────────────────────────────
     ros2_ws_setup = Path("/workspace/Simulation/ros2_ws/install/setup.bash")
     if ros2_ws_setup.exists():
         print(f"Starting ROS2 bridge (world={args.world} vehicle={args.vehicle})...")
@@ -273,6 +318,7 @@ def main():
 
     # ── Step 8: keep alive, stream remaining server output ───────────────────
     print(f"\nAll processes running.  Ctrl-C to stop everything.\n")
+    print(f"  mavsdk_server             : gRPC :{config.MAVSDK_SERVER_PORT} ← MAVLink :{config.MAVSDK_PORT} (auto-started)")
     print(f"  MAVSDK (offboard scripts) : udp://:{config.MAVSDK_PORT}")
     print(f"  QGroundControl            : UDP {config.QGC_PORT} (auto-detected)")
     if args.gui:

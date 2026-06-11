@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <sdf version="1.9">
-  <world name="landing">
+  <world name="random_aruco">
 
     <physics type="ode">
       <max_step_size>0.004</max_step_size>
@@ -65,11 +65,11 @@
       <elevation>0</elevation>
     </spherical_coordinates>
 
-    <!-- Single ArUco 4x4_50 ID0 marker at world origin (500mm x 500mm) -->
+    <!-- Static reference layout: one ArUco 4x4_50 ID0 marker 6 m north of the drone spawn. -->
     <include>
       <uri>model://aruco_4x4_id0</uri>
-      <name>aruco_id0</name>
-      <pose>10 5 0 0 0 0</pose>
+      <name>aruco_4x4_id0</name>
+      <pose>6 0 0 0 0 0</pose>
     </include>
 
   </world>

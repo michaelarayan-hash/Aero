@@ -26,27 +26,26 @@ RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.asc \
     python3-colcon-common-extensions \
     && rm -rf /var/lib/apt/lists/*
 
-# ── 3. Non-root user (dev, UID 1000) ──────────────────────────────────────────
+# ── 3. Python deps (system-wide) ──────────────────────────────────────────────
+RUN pip3 install --break-system-packages \
+    "numpy<2" \
+    "mavsdk>=2.0.0" \
+    torch \
+    torchvision \
+    onnxruntime
+
+# ── 4. Non-root user (dev, UID 1000) ──────────────────────────────────────────
 RUN userdel --remove ubuntu 2>/dev/null || true \
     && useradd --create-home --uid 1000 --shell /bin/bash dev \
     && echo "dev ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/dev
 
 USER dev
 WORKDIR /home/dev
-ENV PATH="/home/dev/.local/bin:${PATH}"
 
-# ── 4. uv ─────────────────────────────────────────────────────────────────────
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# ── 5. Python AI deps via uv venv ─────────────────────────────────────────────
-COPY --chown=dev:dev pyproject.toml /tmp/pyproject.toml
-RUN uv venv /home/dev/.venv \
-    && uv pip install --python /home/dev/.venv/bin/python -r /tmp/pyproject.toml
-
-# ── 6. Shell setup ────────────────────────────────────────────────────────────
+# ── 5. Shell setup ────────────────────────────────────────────────────────────
 RUN echo "source /opt/ros/jazzy/setup.bash" >> /home/dev/.bashrc
 
-# ── 7. Entrypoint ─────────────────────────────────────────────────────────────
+# ── 6. Entrypoint ─────────────────────────────────────────────────────────────
 USER root
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN dos2unix /entrypoint.sh && chmod +x /entrypoint.sh

@@ -12,19 +12,19 @@ from mavsdk.action import ActionError
 from mavsdk.offboard import OffboardError, PositionNedYaw, VelocityBodyYawspeed
 
 # ── Constants ─────────────────────────────────────────────────────────────────
-MAVSDK_ADDRESS     = f"udpin://0.0.0.0:{14540}"
-MAVSDK_SERVER_HOST = "sim"   # sim container hostname on the aero Docker network
-MAVSDK_SERVER_PORT = 50051
-TAKEOFF_ALT_M      = 3.0
+MAVSDK_SERVER_HOST  = "sim"   # sim container hostname on the aero Docker network
+MAVSDK_SERVER_PORT  = 50051
+CONNECT_TIMEOUT_SEC = 30     # seconds to wait for mavsdk_server gRPC + PX4 MAVLink
+TAKEOFF_ALT_M       = 5.0
 DETECT_HZ          = 10
-DESCENT_SPEED_MS   = 0.3
+DESCENT_SPEED_MS   = 1.0
 KP_XY              = 0.5
 MAX_XY_VEL_MS      = 1.0
-XY_ALIGN_THRESH_M  = 0.15
-LAND_ALT_M         = 0.4
+XY_ALIGN_THRESH_M  = 0.2
+LAND_ALT_M         = 0.3
 POSE_TIMEOUT_SEC   = 1.0
 GPS_TIMEOUT_SEC    = 30
-IN_AIR_TIMEOUT     = 30
+IN_AIR_TIMEOUT     = 45
 LAND_TIMEOUT       = 60
 
 
@@ -42,14 +42,17 @@ def _clamp(value: float, low: float, high: float) -> float:
 
 
 async def _wait_in_air(drone, state: bool, timeout: float, label: str) -> None:
+    stream = drone.telemetry.in_air()
     async def _watch():
-        async for in_air in drone.telemetry.in_air():
+        async for in_air in stream:
             if in_air == state:
                 return
     try:
         await asyncio.wait_for(_watch(), timeout=timeout)
     except asyncio.TimeoutError:
         raise TimeoutError(f"Timed out waiting for {label} after {timeout}s")
+    finally:
+        await stream.aclose()
 
 
 async def _get_altitude(drone) -> float:
@@ -58,8 +61,9 @@ async def _get_altitude(drone) -> float:
 
 
 async def _wait_for_altitude(drone, target_m: float, timeout: float, logger) -> None:
+    stream = drone.telemetry.position()
     async def _watch():
-        async for pos in drone.telemetry.position():
+        async for pos in stream:
             if pos.relative_altitude_m >= target_m:
                 logger.info(f"Reached {pos.relative_altitude_m:.1f} m AGL.")
                 return
@@ -67,11 +71,15 @@ async def _wait_for_altitude(drone, target_m: float, timeout: float, logger) -> 
         await asyncio.wait_for(_watch(), timeout=timeout)
     except asyncio.TimeoutError:
         raise TimeoutError(f"Timed out waiting to reach {target_m:.1f} m after {timeout}s")
+    finally:
+        await stream.aclose()
 
 
 # ── Flight coroutine ──────────────────────────────────────────────────────────
 async def run_landing(
     altitude_m: float,
+    init_north_m: float,
+    init_east_m: float,
     server_host: str,
     shutdown_event: threading.Event,
     shared: dict,
@@ -80,13 +88,24 @@ async def run_landing(
 ) -> None:
         period = 1.0 / DETECT_HZ
         drone = System(mavsdk_server_address=server_host, port=MAVSDK_SERVER_PORT)
-        await drone.connect(system_address=MAVSDK_ADDRESS)
 
-        logger.info(f"Connecting to PX4 via mavsdk_server at {server_host}:{MAVSDK_SERVER_PORT}...")
-        async for state in drone.core.connection_state():
-            if state.is_connected:
-                logger.info("Connected.")
-                break
+        logger.info(f"Connecting to mavsdk_server at {server_host}:{MAVSDK_SERVER_PORT}...")
+        await drone.connect()
+
+        async def _wait_connected():
+            async for state in drone.core.connection_state():
+                if state.is_connected:
+                    return
+
+        try:
+            await asyncio.wait_for(_wait_connected(), timeout=CONNECT_TIMEOUT_SEC)
+        except asyncio.TimeoutError:
+            raise RuntimeError(
+                f"mavsdk_server at {server_host}:{MAVSDK_SERVER_PORT} did not report a "
+                f"connected drone within {CONNECT_TIMEOUT_SEC}s. "
+                f"Ensure sim.py is running and PX4 SITL is up before launching."
+            )
+        logger.info("Connected to PX4.")
 
         logger.info("Waiting for GPS fix...")
 
@@ -108,13 +127,24 @@ async def run_landing(
         await drone.action.takeoff()
         await _wait_in_air(drone, True, IN_AIR_TIMEOUT, "airborne")
         logger.info("Climbing to target altitude...")
-        await _wait_for_altitude(drone, altitude_m * 0.8, IN_AIR_TIMEOUT, logger)
+        await _wait_for_altitude(drone, altitude_m * 0.9, IN_AIR_TIMEOUT, logger)
+
+        attitude_stream = drone.telemetry.attitude_euler()
+        async def _read_yaw():
+            async for att in attitude_stream:
+                return att.yaw_deg
+        try:
+            current_yaw = await _read_yaw()
+        finally:
+            await attitude_stream.aclose()
+
+        await asyncio.sleep(2.0)
         logger.info("Entering offboard mode.")
 
-        seed = PositionNedYaw(1.0, 1.0, -altitude_m, 0.0)
-        await drone.offboard.set_position_ned(seed)
+        init_setpoint = PositionNedYaw(init_north_m, init_east_m, -altitude_m, current_yaw)
+        await drone.offboard.set_position_ned(init_setpoint)
         await drone.offboard.start()
-        await asyncio.sleep(5)
+        await asyncio.sleep(8)
         logger.info("Offboard active. Starting control loop.")
 
         lstate = LandState.SEARCH
@@ -199,9 +229,13 @@ class LandingNode(Node):
 
         self.declare_parameter('altitude', TAKEOFF_ALT_M)
         self.declare_parameter('mavsdk_server_host', MAVSDK_SERVER_HOST)
+        self.declare_parameter('init_north_m', 0.0)
+        self.declare_parameter('init_east_m',  0.0)
 
         self._altitude    = self.get_parameter('altitude').get_parameter_value().double_value
         self._server_host = self.get_parameter('mavsdk_server_host').get_parameter_value().string_value
+        self._init_north  = self.get_parameter('init_north_m').get_parameter_value().double_value
+        self._init_east   = self.get_parameter('init_east_m').get_parameter_value().double_value
 
         self._shared = shared
         self._lock   = lock
@@ -209,6 +243,7 @@ class LandingNode(Node):
         self.create_subscription(PoseStamped, '/aruco/pose', self._on_pose, 10)
         self.get_logger().info(
             f"Subscribed to /aruco/pose. Takeoff altitude: {self._altitude} m  "
+            f"init waypoint: N={self._init_north} E={self._init_east}  "
             f"mavsdk_server: {self._server_host}:{MAVSDK_SERVER_PORT}"
         )
 
@@ -239,8 +274,8 @@ def main(args=None):
 
     try:
         asyncio.run(run_landing(
-            node._altitude, node._server_host,
-            shutdown_event, shared, lock, node.get_logger()
+            node._altitude, node._init_north, node._init_east,
+            node._server_host, shutdown_event, shared, lock, node.get_logger()
         ))
     except KeyboardInterrupt:
         pass

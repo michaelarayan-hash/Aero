@@ -1,1 +1,9 @@
+<<<<<<< HEAD
 {"world": "default", "vehicle": "x500_lidar_front_cam"}
+=======
+<<<<<<< HEAD
+{"world": "random_aruco", "vehicle": "x500_mono_cam_down", "seed": 783683327}
+=======
+{"world": "random_aruco", "vehicle": "x500_mono_cam_down", "seed": 583343324}
+>>>>>>> refs/remotes/origin/demo_day
+>>>>>>> demo_day

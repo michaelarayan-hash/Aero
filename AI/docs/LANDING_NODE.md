@@ -112,7 +112,7 @@ ros2 run camera_feed landing_node --ros-args \
   -p mavsdk_server_host:=sim
 ```
 
-`mavsdk_server` must already be running in the sim container — it does not start automatically. See [PRECISION_LANDING.md](../../docs/PRECISION_LANDING.md) for the command.
+`mavsdk_server` starts automatically when `sim.py` is run in the sim container. See [PRECISION_LANDING.md](../../docs/PRECISION_LANDING.md) for the full startup sequence.
 
 ---
 
@@ -120,8 +120,8 @@ ros2 run camera_feed landing_node --ros-args \
 
 ```
 [landing_node]: Subscribed to /aruco/pose. Takeoff altitude: 3.0 m  mavsdk_server: sim:50051
-[landing_node]: Connecting to PX4 via mavsdk_server at sim:50051...
-[landing_node]: Connected.
+[landing_node]: Connecting to mavsdk_server at sim:50051...
+[landing_node]: Connected to PX4.
 [landing_node]: Waiting for GPS fix...
 [landing_node]: Arming and taking off to 3.0 m...
 [landing_node]: Armed confirmed. Waiting before takeoff...
@@ -155,6 +155,13 @@ The drone from a previous run is still armed or airborne. Reset the simulation (
 - The drone may have drifted off the marker during the offset phase
 - The `z_mm >= 100.0` guard filters detections below 10 cm — ensure altitude is reasonable
 
+**`RuntimeError: mavsdk_server at sim:50051 did not report a connected drone within 30s`**
+
+The AI container could not reach `mavsdk_server` or PX4 did not send a MAVLink heartbeat in time. Common causes:
+- `sim.py` was not run before launching, or it is still starting up — wait for `[OK] Simulation is ready.`
+- `mavsdk_server` exited immediately after sim.py started (check `/tmp/mavsdk_server.log` in the sim container)
+- Docker network routing between the two containers is broken — verify `ping sim` from the AI container resolves
+
 **`TimeoutError: Timed out waiting to reach X m`**
 
-PX4 takeoff did not reach the expected altitude within `IN_AIR_TIMEOUT` (30s). Usually means the sim is not running or the drone spawned underground. Restart the simulation.
+PX4 takeoff did not reach the expected altitude within `IN_AIR_TIMEOUT` (45s). Usually means the sim is not running or the drone spawned underground. Restart the simulation.

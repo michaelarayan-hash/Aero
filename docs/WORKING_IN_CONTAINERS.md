@@ -37,9 +37,10 @@ Each window is now attached to its respective container at `/workspace/Simulatio
 
 ## 3. Sim container — run the simulation
 
-Open a terminal in the Sim VS Code window and start the simulation:
+Open a terminal in the Sim VS Code window. Activate the virtual environment, then start the simulation:
 
 ```bash
+source .venv/bin/activate
 python3 sim.py --world aruco --gui
 ```
 

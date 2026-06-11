@@ -29,19 +29,25 @@ Both nodes run together from a single launch file. The `landing_node` drives the
    docker compose up -d
    ```
 
-2. Simulation running in the sim container with the `landing` world:
+2. Simulation running in the sim container. Choose a world:
+
+   **Fixed marker** (`landing.sdf`) — ArUco at a known position:
    ```bash
+   source .venv/bin/activate
    python3 sim.py --world landing --gui
    ```
+
+   **Random marker** (`random_aruco.sdf`) — ArUco placed randomly each run:
+   ```bash
+   source .venv/bin/activate
+   python3 sim.py --world random_aruco --gui
+   ```
+
    Wait for `[OK] Simulation is ready.` before proceeding.
 
-3. Start `mavsdk_server` manually in the sim container. The AI container connects to it over the Docker bridge network using the hostname `sim`:
-   ```bash
-   /home/dev/.local/lib/python3.12/site-packages/mavsdk/bin/mavsdk_server -p 50051 udpin://0.0.0.0:14540
-   ```
-   Leave this running in a dedicated terminal — `landing_node` will not connect without it.
+   `mavsdk_server` starts automatically when `sim.py` is run — no manual step needed.
 
-4. In the AI container, build and source the workspace (first time or after code changes to `setup.py`):
+3. In the AI container, build and source the workspace (first time or after code changes to `setup.py`):
    ```bash
    cd /workspace/AI
    colcon build --packages-select camera_feed --symlink-install
@@ -55,8 +61,15 @@ Both nodes run together from a single launch file. The `landing_node` drives the
 
 From a terminal in the AI container:
 
+**Random marker world** (`random_aruco.sdf`) — drone takes off vertically then searches:
 ```bash
 ros2 launch camera_feed precision_landing.launch.py display:=true
+```
+
+**Fixed marker world** (`landing.sdf`) — drone flies to an offset first, then aligns:
+```bash
+ros2 launch camera_feed precision_landing.launch.py \
+  init_north_m:=3.5 init_east_m:=6.0 display:=true
 ```
 
 `display:=true` opens an OpenCV window showing the live camera feed with the detected marker highlighted. Omit it (or set `false`) for headless operation.
@@ -65,14 +78,13 @@ ros2 launch camera_feed precision_landing.launch.py display:=true
 
 | Argument | Default | Description |
 |---|---|---|
-| `altitude` | `3.0` | Takeoff altitude in metres |
+| `altitude` | `5.0` | Takeoff altitude in metres |
 | `display` | `false` | Show ArUco detection window |
 | `mavsdk_server_host` | `sim` | Hostname of `mavsdk_server` |
+| `init_north_m` | `0.0` | Initial offboard waypoint north offset (m) |
+| `init_east_m` | `0.0` | Initial offboard waypoint east offset (m) |
 
-Example with custom altitude:
-```bash
-ros2 launch camera_feed precision_landing.launch.py altitude:=5.0 display:=true
-```
+The `init_north_m` / `init_east_m` pair sets where the drone flies after entering offboard mode, before the precision landing loop begins. The default (0, 0) means "take off and hover in place" — correct for `random_aruco.sdf` where the marker could be anywhere. For `landing.sdf`, the offset 3.5 N / 6.0 E gives the control loop a non-trivial alignment task.
 
 ---
 
@@ -81,7 +93,7 @@ ros2 launch camera_feed precision_landing.launch.py altitude:=5.0 display:=true
 1. **Connect** — `landing_node` connects to `mavsdk_server` in the sim container and waits for a GPS fix
 2. **Arm** — arms the drone and waits for telemetry confirmation
 3. **Take off** — climbs to `altitude` metres and waits until 80% of the target altitude is reached
-4. **Offset** — enters offboard mode and flies to a small offset from the spawn point, giving the control loop a non-trivial alignment task
+4. **Offset** — enters offboard mode and flies to the `init_north_m` / `init_east_m` waypoint (default 0, 0 — hover in place; use 3.5 / 6.0 for `landing.sdf`)
 5. **Control loop** (10 Hz):
    - If no fresh pose from `aruco_node`: hover in place (`SEARCH`)
    - If aligned within 15 cm: descend at 0.3 m/s (`DESCEND`)
@@ -115,8 +127,10 @@ The `landing_node` logs each state transition (SEARCH → ALIGN → DESCEND → 
 If the previous run ended without cleanly landing and disarming (e.g. crashed mid-flight), PX4 will deny the next `arm()` call with `COMMAND_DENIED`. Restart the simulation fully:
 
 ```bash
-# In the sim container
+# In the sim container — use whichever world you were running
 python3 sim.py --world landing --gui
+# or
+python3 sim.py --world random_aruco --gui
 ```
 
 This resets PX4 and respawns the drone on the ground. Then re-run the launch file in the AI container.
